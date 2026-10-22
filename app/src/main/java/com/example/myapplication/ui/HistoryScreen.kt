@@ -460,7 +460,7 @@ fun HistoryScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 12.dp, horizontal = 16.dp),
+                        .padding(vertical = 12.dp, horizontal = 12.dp),
                     horizontalArrangement = Arrangement.SpaceAround,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -477,16 +477,22 @@ fun HistoryScreen(
                         onClick = { onTabSelected(1) }
                     )
                     BottomNavItem(
+                        iconEmoji = "💡",
+                        label = "Tips",
+                        isSelected = false,
+                        onClick = { onTabSelected(2) }
+                    )
+                    BottomNavItem(
                         iconEmoji = "⏱️",
                         label = "History",
                         isSelected = true,
-                        onClick = { onTabSelected(2) }
+                        onClick = { onTabSelected(3) }
                     )
                     BottomNavItem(
                         iconEmoji = "👤",
                         label = "Profile",
                         isSelected = false,
-                        onClick = { onTabSelected(3) }
+                        onClick = { onTabSelected(4) }
                     )
                 }
             }

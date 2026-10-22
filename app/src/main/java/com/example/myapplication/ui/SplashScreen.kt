@@ -213,7 +213,7 @@ fun SplashScreen(
 
                 Column {
                     Text(
-                        text = "InfoGuard",
+                        text = "TruthLens",
                         color = Color.White,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
@@ -300,7 +300,7 @@ fun SplashScreen(
 
                 // App Title
                 Text(
-                    text = "InfoGuard",
+                    text = "TruthLens",
                     fontSize = 40.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = Color.White,

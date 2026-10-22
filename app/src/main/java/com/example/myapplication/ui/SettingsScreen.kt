@@ -194,7 +194,7 @@ fun SettingsScreen(
             // 7. ABOUT Section
             item {
                 SettingsSectionGroup(title = "ABOUT") {
-                    SettingsRow(iconEmoji = "ℹ️", title = "About InfoGuard")
+                    SettingsRow(iconEmoji = "ℹ️", title = "About TruthLens")
                 }
             }
 

@@ -115,7 +115,7 @@ fun SourceCredibilityScreen(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "InfoGuard trust level evaluations.",
+                                text = "TruthLens trust level evaluations.",
                                 color = Color(0xFF94A3B8),
                                 fontSize = 12.sp
                             )

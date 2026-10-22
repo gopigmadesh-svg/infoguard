@@ -476,7 +476,7 @@ fun PrivacySecurityScreen(
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "InfoGuard does not sell personal data or use account for advertising.",
+                            text = "TruthLens does not sell personal data or use account for advertising.",
                             color = Color(0xFF94A3B8),
                             fontSize = 11.sp,
                             lineHeight = 15.sp

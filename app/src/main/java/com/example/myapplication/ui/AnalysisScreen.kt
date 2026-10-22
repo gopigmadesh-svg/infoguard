@@ -158,7 +158,7 @@ fun AnalysisScreen(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "InfoGuard AI is examining the submitted content.",
+                            text = "TruthLens AI is examining the submitted content.",
                             color = Color(0xFF94A3B8),
                             fontSize = 12.sp
                         )

@@ -66,7 +66,7 @@ fun HelpSupportScreen(
     val faqList = listOf(
         FaqItemData(
             question = "How does AI fact-checking work?",
-            answer = "InfoGuard evaluates headlines, articles, images, and links against verified databases, primary research repositories, and publisher metadata to rate claim credibility."
+            answer = "TruthLens evaluates headlines, articles, images, and links against verified databases, primary research repositories, and publisher metadata to rate claim credibility."
         ),
         FaqItemData(
             question = "What does 'Needs Context' mean?",
@@ -78,7 +78,7 @@ fun HelpSupportScreen(
         ),
         FaqItemData(
             question = "Can I export a fact-check report?",
-            answer = "Yes, tapping 'Download PDF' on any Result or Analytics Report screen lets you save an official InfoGuard verification sheet to your device."
+            answer = "Yes, tapping 'Download PDF' on any Result or Analytics Report screen lets you save an official TruthLens verification sheet to your device."
         )
     )
 
@@ -153,7 +153,7 @@ fun HelpSupportScreen(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "Find answers or contact the InfoGuard team.",
+                            text = "Find answers or contact the TruthLens team.",
                             color = Color(0xFF94A3B8),
                             fontSize = 12.sp
                         )

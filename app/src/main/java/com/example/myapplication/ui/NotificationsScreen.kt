@@ -84,7 +84,7 @@ fun NotificationsScreen(
                 isUnread = false
             ),
             NotificationItem(
-                title = "InfoGuard Weekly Summary",
+                title = "TruthLens Weekly Summary",
                 subtitle = "Your weekly fact-checking summary is ready.",
                 timeAgo = "2 days ago",
                 iconEmoji = "📊",

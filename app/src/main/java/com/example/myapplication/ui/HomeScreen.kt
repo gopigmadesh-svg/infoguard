@@ -55,6 +55,10 @@ data class RecentScanItem(
 @Composable
 fun HomeScreen(
     onBackToSplash: () -> Unit = {},
+    onScanNewsClick: () -> Unit = {},
+    onScanImageClick: () -> Unit = {},
+    onCheckUrlClick: () -> Unit = {},
+    onScanHistoryClick: () -> Unit = {},
     onTabSelected: (Int) -> Unit = {}
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -307,7 +311,7 @@ fun HomeScreen(
                             iconBgColor = Color(0x2600E5FF),
                             modifier = Modifier
                                 .weight(1f)
-                                .clickable { onTabSelected(1) }
+                                .clickable { onScanNewsClick() }
                         )
                         QuickActionCard(
                             title = "Scan Image",
@@ -316,7 +320,7 @@ fun HomeScreen(
                             iconBgColor = Color(0x267C3AED),
                             modifier = Modifier
                                 .weight(1f)
-                                .clickable { onTabSelected(1) }
+                                .clickable { onScanImageClick() }
                         )
                     }
                 }
@@ -333,7 +337,7 @@ fun HomeScreen(
                             iconBgColor = Color(0x26F59E0B),
                             modifier = Modifier
                                 .weight(1f)
-                                .clickable { onTabSelected(1) }
+                                .clickable { onCheckUrlClick() }
                         )
                         QuickActionCard(
                             title = "Scan History",
@@ -342,7 +346,7 @@ fun HomeScreen(
                             iconBgColor = Color(0x2610B981),
                             modifier = Modifier
                                 .weight(1f)
-                                .clickable { onTabSelected(1) }
+                                .clickable { onScanHistoryClick() }
                         )
                     }
                 }
@@ -397,7 +401,7 @@ fun HomeScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 12.dp, horizontal = 16.dp),
+                        .padding(vertical = 12.dp, horizontal = 12.dp),
                     horizontalArrangement = Arrangement.SpaceAround,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -420,8 +424,8 @@ fun HomeScreen(
                         }
                     )
                     BottomNavItem(
-                        iconEmoji = "⏱️",
-                        label = "History",
+                        iconEmoji = "💡",
+                        label = "Tips",
                         isSelected = selectedTab == 2,
                         onClick = {
                             selectedTab = 2
@@ -429,12 +433,21 @@ fun HomeScreen(
                         }
                     )
                     BottomNavItem(
-                        iconEmoji = "👤",
-                        label = "Profile",
+                        iconEmoji = "⏱️",
+                        label = "History",
                         isSelected = selectedTab == 3,
                         onClick = {
                             selectedTab = 3
                             onTabSelected(3)
+                        }
+                    )
+                    BottomNavItem(
+                        iconEmoji = "👤",
+                        label = "Profile",
+                        isSelected = selectedTab == 4,
+                        onClick = {
+                            selectedTab = 4
+                            onTabSelected(4)
                         }
                     )
                 }

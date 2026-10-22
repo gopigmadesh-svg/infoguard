@@ -46,6 +46,7 @@ import com.example.myapplication.ui.SettingsScreen
 import com.example.myapplication.ui.SignUpScreen
 import com.example.myapplication.ui.SourceCredibilityScreen
 import com.example.myapplication.ui.SplashScreen
+import com.example.myapplication.ui.TipsScreen
 import com.example.myapplication.ui.TopicInsightsScreen
 import com.example.myapplication.ui.UrlAnalysisScreen
 import com.example.myapplication.ui.WhyResultScreen
@@ -62,6 +63,7 @@ enum class AppScreen {
     PROFILE_SETUP,
     HOME,
     SCAN,
+    TIPS,
     CAMERA_SCAN,
     IMAGE_ANALYSIS,
     URL_ANALYSIS,
@@ -189,11 +191,24 @@ fun MainAppNav() {
                     onBackToSplash = {
                         currentScreen = AppScreen.PRESENTATION_BOARD
                     },
+                    onScanNewsClick = {
+                        currentScreen = AppScreen.SCAN
+                    },
+                    onScanImageClick = {
+                        currentScreen = AppScreen.CAMERA_SCAN
+                    },
+                    onCheckUrlClick = {
+                        currentScreen = AppScreen.URL_ANALYSIS
+                    },
+                    onScanHistoryClick = {
+                        currentScreen = AppScreen.HISTORY
+                    },
                     onTabSelected = { index ->
                         when (index) {
                             1 -> currentScreen = AppScreen.SCAN
-                            2 -> currentScreen = AppScreen.HISTORY
-                            3 -> currentScreen = AppScreen.PROFILE
+                            2 -> currentScreen = AppScreen.TIPS
+                            3 -> currentScreen = AppScreen.HISTORY
+                            4 -> currentScreen = AppScreen.PROFILE
                         }
                     }
                 )
@@ -204,13 +219,39 @@ fun MainAppNav() {
                         currentScreen = AppScreen.HOME
                     },
                     onScanFinished = {
+                        currentScreen = AppScreen.ANALYSIS
+                    },
+                    onScanNewsClick = { _ ->
+                        currentScreen = AppScreen.ANALYSIS
+                    },
+                    onScanImageClick = { _, _ ->
+                        currentScreen = AppScreen.IMAGE_ANALYSIS
+                    },
+                    onScanUrlClick = { _ ->
                         currentScreen = AppScreen.URL_ANALYSIS
                     },
                     onTabSelected = { index ->
                         when (index) {
                             0 -> currentScreen = AppScreen.HOME
-                            2 -> currentScreen = AppScreen.HISTORY
-                            3 -> currentScreen = AppScreen.PROFILE
+                            1 -> currentScreen = AppScreen.SCAN
+                            2 -> currentScreen = AppScreen.TIPS
+                            3 -> currentScreen = AppScreen.HISTORY
+                            4 -> currentScreen = AppScreen.PROFILE
+                        }
+                    }
+                )
+            }
+            AppScreen.TIPS -> {
+                TipsScreen(
+                    onBackClick = {
+                        currentScreen = AppScreen.HOME
+                    },
+                    onTabSelected = { index ->
+                        when (index) {
+                            0 -> currentScreen = AppScreen.HOME
+                            1 -> currentScreen = AppScreen.SCAN
+                            3 -> currentScreen = AppScreen.HISTORY
+                            4 -> currentScreen = AppScreen.PROFILE
                         }
                     }
                 )
@@ -273,8 +314,9 @@ fun MainAppNav() {
                         when (index) {
                             0 -> currentScreen = AppScreen.HOME
                             1 -> currentScreen = AppScreen.SCAN
-                            2 -> currentScreen = AppScreen.HISTORY
-                            3 -> currentScreen = AppScreen.PROFILE
+                            2 -> currentScreen = AppScreen.TIPS
+                            3 -> currentScreen = AppScreen.HISTORY
+                            4 -> currentScreen = AppScreen.PROFILE
                         }
                     }
                 )
@@ -305,9 +347,6 @@ fun MainAppNav() {
             AppScreen.PRESENTATION_BOARD -> {
                 PresentationBoardScreen(
                     onBackClick = {
-                        currentScreen = AppScreen.HOME
-                    },
-                    onScreenSelect = { _ ->
                         currentScreen = AppScreen.HOME
                     }
                 )
@@ -375,7 +414,8 @@ fun MainAppNav() {
                         when (index) {
                             0 -> currentScreen = AppScreen.HOME
                             1 -> currentScreen = AppScreen.SCAN
-                            3 -> currentScreen = AppScreen.PROFILE
+                            2 -> currentScreen = AppScreen.TIPS
+                            4 -> currentScreen = AppScreen.PROFILE
                         }
                     },
                     onStartCheckingClick = {
@@ -422,14 +462,23 @@ fun MainAppNav() {
             }
             AppScreen.PROFILE -> {
                 ProfileScreen(
+                    onNavigateToPersonalInfo = {
+                        currentScreen = AppScreen.PROFILE_SETUP
+                    },
                     onNavigateToSavedArticles = {
                         currentScreen = AppScreen.SAVED_ARTICLES
                     },
                     onNavigateToHistory = {
-                        currentScreen = AppScreen.TOPIC_INSIGHTS
+                        currentScreen = AppScreen.HISTORY
+                    },
+                    onNavigateToPrivacySecurity = {
+                        currentScreen = AppScreen.PRIVACY_SECURITY
                     },
                     onNavigateToSettings = {
                         currentScreen = AppScreen.SETTINGS
+                    },
+                    onNavigateToHelpSupport = {
+                        currentScreen = AppScreen.HELP_SUPPORT
                     },
                     onLogOutClick = {
                         currentScreen = AppScreen.LOGOUT
@@ -438,7 +487,9 @@ fun MainAppNav() {
                         when (index) {
                             0 -> currentScreen = AppScreen.HOME
                             1 -> currentScreen = AppScreen.SCAN
-                            2 -> currentScreen = AppScreen.HISTORY
+                            2 -> currentScreen = AppScreen.TIPS
+                            3 -> currentScreen = AppScreen.HISTORY
+                            4 -> currentScreen = AppScreen.PROFILE
                         }
                     }
                 )

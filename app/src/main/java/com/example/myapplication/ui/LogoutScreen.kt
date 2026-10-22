@@ -148,9 +148,9 @@ fun LogoutScreen(
 
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    // Title: Log out of InfoGuard?
+                    // Title: Log out of TruthLens?
                     Text(
-                        text = "Log out of InfoGuard?",
+                        text = "Log out of TruthLens?",
                         color = Color.White,
                         fontSize = 28.sp,
                         fontWeight = FontWeight.ExtraBold,

@@ -1,5 +1,8 @@
 package com.example.myapplication.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -20,19 +23,25 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,11 +54,21 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import com.example.myapplication.data.AiChatRepository
+import com.example.myapplication.data.AiProvider
+import com.example.myapplication.data.ChatHistoryMessage
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.UUID
 
 data class ChatMessage(
+    val id: String = UUID.randomUUID().toString(),
     val text: String,
     val isUser: Boolean,
-    val timestamp: String
+    val timestamp: String = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
 )
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -58,40 +77,59 @@ fun ChatScreen(
     onBackClick: () -> Unit = {}
 ) {
     var inputText by remember { mutableStateOf("") }
+    var isTyping by remember { mutableStateOf(false) }
+    var showConfigDialog by remember { mutableStateOf(false) }
+
+    val coroutineScope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
 
     val messages = remember {
         mutableStateListOf(
             ChatMessage(
-                text = "Why was this claim flagged?",
-                isUser = true,
-                timestamp = "10:14 AM"
-            ),
-            ChatMessage(
-                text = "Viral popularity does not guarantee accuracy. Check the original source, publication date, supporting evidence, and independent reporting before sharing.",
+                text = "Hi! I'm TruthLens AI, your fact-checking assistant. How can I help you analyze a headline, verify a source, or spot misleading claims today?",
                 isUser = false,
-                timestamp = "10:15 AM"
+                timestamp = "10:00 AM"
             )
         )
     }
 
     val suggestedQuestions = listOf(
-        "How can I verify this news?",
-        "Why was this claim flagged?",
         "How do I spot fake news?",
-        "What does credibility mean?"
+        "Why was this claim flagged?",
+        "How to verify health claims?",
+        "How to detect AI images?"
     )
 
-    fun sendMessage(msgText: String) {
-        if (msgText.isNotBlank()) {
-            messages.add(ChatMessage(text = msgText, isUser = true, timestamp = "10:16 AM"))
-            messages.add(
-                ChatMessage(
-                    text = "InfoGuard AI analyzed your question: Always verify claim origins, look for peer-reviewed sources, and check for sensationalized wording.",
-                    isUser = false,
-                    timestamp = "10:16 AM"
-                )
+    fun startNewChat() {
+        messages.clear()
+        messages.add(
+            ChatMessage(
+                text = "Fresh conversation started. What news item or claim would you like to verify?",
+                isUser = false
             )
-            inputText = ""
+        )
+    }
+
+    fun sendMessage(msgText: String) {
+        val trimmed = msgText.trim()
+        if (trimmed.isEmpty() || isTyping) return
+
+        val userMsg = ChatMessage(text = trimmed, isUser = true)
+        messages.add(userMsg)
+        inputText = ""
+        isTyping = true
+
+        coroutineScope.launch {
+            // Auto scroll to bottom
+            listState.animateScrollToItem(messages.size)
+
+            val history = messages.map { ChatHistoryMessage(it.text, it.isUser) }
+            val responseText = AiChatRepository.fetchAiResponse(history, trimmed)
+
+            messages.add(ChatMessage(text = responseText, isUser = false))
+            isTyping = false
+
+            listState.animateScrollToItem(messages.size)
         }
     }
 
@@ -108,7 +146,7 @@ fun ChatScreen(
         Canvas(modifier = Modifier.fillMaxSize()) {
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(Color(0x207C3AED), Color.Transparent),
+                    colors = listOf(Color(0x2000E5FF), Color.Transparent),
                     center = Offset(size.width * 0.85f, size.height * 0.15f),
                     radius = size.width * 0.6f
                 ),
@@ -119,6 +157,7 @@ fun ChatScreen(
 
         Column(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
@@ -157,7 +196,7 @@ fun ChatScreen(
 
                             Column {
                                 Text(
-                                    text = "InfoGuard AI",
+                                    text = "TruthLens AI",
                                     color = Color.White,
                                     fontSize = 22.sp,
                                     fontWeight = FontWeight.ExtraBold,
@@ -172,7 +211,7 @@ fun ChatScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "Online • Guidance AI Assistant",
+                                        text = "Online • Fact-Check AI",
                                         color = Color(0xFF94A3B8),
                                         fontSize = 11.sp
                                     )
@@ -180,18 +219,34 @@ fun ChatScreen(
                             }
                         }
 
-                        // Info Button
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = Color(0x261E293B),
-                            border = BorderStroke(1.dp, Color(0x3300E5FF)),
-                            modifier = Modifier.size(42.dp)
-                        ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier.padding(10.dp)
+                        // Header Actions: New Chat & AI Config
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            // New Chat Button
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = Color(0x261E293B),
+                                border = BorderStroke(1.dp, Color(0x3300E5FF)),
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clickable { startNewChat() }
                             ) {
-                                Text(text = "ℹ️", fontSize = 16.sp)
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(text = "🧹", fontSize = 16.sp)
+                                }
+                            }
+
+                            // AI Config Settings Button
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = Color(0x261E293B),
+                                border = BorderStroke(1.dp, Color(0x3300E5FF)),
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clickable { showConfigDialog = true }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(text = "⚙️", fontSize = 16.sp)
+                                }
                             }
                         }
                     }
@@ -202,7 +257,7 @@ fun ChatScreen(
                     Card(
                         shape = RoundedCornerShape(22.dp),
                         colors = CardDefaults.cardColors(containerColor = Color(0x401E293B)),
-                        border = BorderStroke(1.dp, Color(0x337C3AED)),
+                        border = BorderStroke(1.dp, Color(0x3300E5FF)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -216,7 +271,7 @@ fun ChatScreen(
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(
                                         brush = Brush.radialGradient(
-                                            colors = listOf(Color(0xFF7C3AED), Color(0xFF5B21B6))
+                                            colors = listOf(Color(0xFF00E5FF), Color(0xFF0F766E))
                                         )
                                     )
                             ) {
@@ -283,14 +338,65 @@ fun ChatScreen(
                 }
 
                 // 4. Chat Messages List
-                items(messages) { message ->
+                items(messages, key = { it.id }) { message ->
                     ChatMessageBubble(message = message)
+                }
+
+                // 5. Typing / Loading Indicator
+                item {
+                    AnimatedVisibility(
+                        visible = isTyping,
+                        enter = fadeIn(),
+                        exit = fadeOut()
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF0F172A))
+                                    .border(1.dp, CyanAccent, CircleShape)
+                            ) {
+                                Text(text = "✨", fontSize = 14.sp)
+                            }
+
+                            Spacer(modifier = Modifier.width(10.dp))
+
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = Color(0xFF0F172A),
+                                border = BorderStroke(1.dp, Color(0x3300E5FF))
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                                ) {
+                                    CircularProgressIndicator(
+                                        color = TealBright,
+                                        strokeWidth = 2.dp,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = "TruthLens AI is analyzing...",
+                                        color = Color(0xFF94A3B8),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
 
                 item { Spacer(modifier = Modifier.height(10.dp)) }
             }
 
-            // 5. Disclaimer & Input Bar Section
+            // 6. Disclaimer & Input Bar Section
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -303,7 +409,7 @@ fun ChatScreen(
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 10.dp)
+                        .padding(bottom = 8.dp)
                 )
 
                 Row(
@@ -315,19 +421,12 @@ fun ChatScreen(
                         onValueChange = { inputText = it },
                         placeholder = {
                             Text(
-                                text = "Ask InfoGuard AI...",
+                                text = "Ask anything about news...",
                                 color = Color(0xFF64748B),
                                 fontSize = 13.sp
                             )
                         },
                         singleLine = true,
-                        trailingIcon = {
-                            Text(
-                                text = "🎙️",
-                                fontSize = 16.sp,
-                                modifier = Modifier.padding(end = 8.dp)
-                            )
-                        },
                         shape = RoundedCornerShape(20.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = CyanAccent,
@@ -344,15 +443,17 @@ fun ChatScreen(
 
                     Surface(
                         shape = CircleShape,
-                        color = TealBright,
+                        color = if (inputText.isNotBlank()) TealBright else Color(0xFF1E293B),
                         modifier = Modifier
                             .size(48.dp)
-                            .clickable { sendMessage(inputText) }
+                            .clickable(enabled = inputText.isNotBlank() && !isTyping) {
+                                sendMessage(inputText)
+                            }
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Text(
                                 text = "➤",
-                                color = DarkNavyStart,
+                                color = if (inputText.isNotBlank()) DarkNavyStart else Color(0xFF64748B),
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -361,6 +462,13 @@ fun ChatScreen(
                 }
             }
         }
+    }
+
+    // AI Config Dialog
+    if (showConfigDialog) {
+        AiConfigDialog(
+            onDismiss = { showConfigDialog = false }
+        )
     }
 }
 
@@ -426,8 +534,8 @@ fun ChatMessageBubble(message: ChatMessage) {
 
                 Surface(
                     shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 4.dp, bottomEnd = 18.dp),
-                    color = Color(0xFFF8FAFC),
-                    shadowElevation = 8.dp,
+                    color = Color(0xFF0F172A),
+                    border = BorderStroke(1.dp, Color(0x3300E5FF)),
                     modifier = Modifier.weight(1f)
                 ) {
                     Column(
@@ -435,7 +543,7 @@ fun ChatMessageBubble(message: ChatMessage) {
                     ) {
                         Text(
                             text = message.text,
-                            color = DarkNavyStart,
+                            color = Color.White,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
                             lineHeight = 18.sp
@@ -446,6 +554,180 @@ fun ChatMessageBubble(message: ChatMessage) {
                             color = Color(0xFF64748B),
                             fontSize = 9.sp
                         )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AiConfigDialog(
+    onDismiss: () -> Unit
+) {
+    var apiKeyText by remember { mutableStateOf(AiChatRepository.apiKey) }
+    var backendUrlText by remember { mutableStateOf(AiChatRepository.customBackendUrl) }
+    var provider by remember { mutableStateOf(AiChatRepository.selectedProvider) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+            border = BorderStroke(1.dp, CyanAccent),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    text = "⚙️ AI Model Configuration",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+
+                Text(
+                    text = "Configure your AI Model key or backend server to enable live model inference.",
+                    color = Color(0xFF94A3B8),
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp
+                )
+
+                // Select Provider Row
+                Text(
+                    text = "SELECT AI PROVIDER",
+                    color = Color(0xFF94A3B8),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (provider == AiProvider.GEMINI) TealBright else Color(0x1F1E293B),
+                        border = BorderStroke(1.dp, if (provider == AiProvider.GEMINI) TealBright else Color(0x33FFFFFF)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { provider = AiProvider.GEMINI }
+                    ) {
+                        Text(
+                            text = "Google Gemini",
+                            color = if (provider == AiProvider.GEMINI) DarkNavyStart else Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(vertical = 10.dp)
+                        )
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (provider == AiProvider.OPENAI) TealBright else Color(0x1F1E293B),
+                        border = BorderStroke(1.dp, if (provider == AiProvider.OPENAI) TealBright else Color(0x33FFFFFF)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { provider = AiProvider.OPENAI }
+                    ) {
+                        Text(
+                            text = "OpenAI GPT",
+                            color = if (provider == AiProvider.OPENAI) DarkNavyStart else Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(vertical = 10.dp)
+                        )
+                    }
+                }
+
+                // API Key Input
+                Column {
+                    Text(
+                        text = "API KEY",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = apiKeyText,
+                        onValueChange = { apiKeyText = it },
+                        placeholder = { Text("Paste API Key here...", color = Color(0xFF64748B), fontSize = 12.sp) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CyanAccent,
+                            unfocusedBorderColor = Color(0x33FFFFFF),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                // Custom Backend Endpoint URL Input
+                Column {
+                    Text(
+                        text = "CUSTOM BACKEND URL (OPTIONAL)",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = backendUrlText,
+                        onValueChange = { backendUrlText = it },
+                        placeholder = { Text("https://api.yourdomain.com/chat", color = Color(0xFF64748B), fontSize = 12.sp) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CyanAccent,
+                            unfocusedBorderColor = Color(0x33FFFFFF),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Button(
+                        onClick = {
+                            AiChatRepository.apiKey = apiKeyText
+                            AiChatRepository.selectedProvider = provider
+                            AiChatRepository.customBackendUrl = backendUrlText
+                            onDismiss()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = TealBright),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Save Config", color = DarkNavyStart, fontWeight = FontWeight.Bold)
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0x261E293B),
+                        border = BorderStroke(1.dp, Color(0x33FFFFFF)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onDismiss() }
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.padding(vertical = 10.dp)
+                        ) {
+                            Text("Cancel", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }

@@ -112,7 +112,7 @@ fun SignUpScreen(
 
                         Column {
                             Text(
-                                text = "InfoGuard",
+                                text = "TruthLens",
                                 color = Color.White,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
@@ -151,7 +151,7 @@ fun SignUpScreen(
             item {
                 Column {
                     Text(
-                        text = "JOIN INFOGUARD",
+                        text = "JOIN TRUTHLENS",
                         color = TealBright,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
@@ -385,63 +385,7 @@ fun SignUpScreen(
                 }
             }
 
-            // 6. Divider & Google Sign-In
-            item {
-                Column {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        HorizontalDivider(
-                            modifier = Modifier.weight(1f),
-                            color = Color(0x33FFFFFF)
-                        )
-                        Text(
-                            text = "OR",
-                            color = Color(0xFF64748B),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 14.dp)
-                        )
-                        HorizontalDivider(
-                            modifier = Modifier.weight(1f),
-                            color = Color(0x33FFFFFF)
-                        )
-                    }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Surface(
-                        shape = RoundedCornerShape(18.dp),
-                        color = Color(0x261E293B),
-                        border = BorderStroke(1.dp, Color(0x33FFFFFF)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp)
-                            .clickable { onSignUpSuccess() }
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center,
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            Text(
-                                text = "G",
-                                color = Color.White,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = "Continue with Google",
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
-                }
-            }
 
             // 7. Footer: Already have an account? Login
             item {

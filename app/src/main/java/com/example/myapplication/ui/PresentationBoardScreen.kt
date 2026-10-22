@@ -16,10 +16,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Surface
@@ -32,33 +32,15 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-data class ScreenPreviewItem(
-    val title: String,
-    val iconEmoji: String,
-    val subtitle: String
-)
-
 @Composable
 fun PresentationBoardScreen(
     onBackClick: () -> Unit = {},
-    onScreenSelect: (String) -> Unit = {}
+    onAskAiClick: () -> Unit = {}
 ) {
-    val keyScreens = listOf(
-        ScreenPreviewItem("Splash", "🛡️", "Concentric Pulse"),
-        ScreenPreviewItem("Onboarding", "📱", "Feature Intro"),
-        ScreenPreviewItem("Login", "🔑", "Welcome Back"),
-        ScreenPreviewItem("Home", "🏠", "Trust Dashboard"),
-        ScreenPreviewItem("Check Input", "🔍", "AI Input Scanner"),
-        ScreenPreviewItem("Fact-Check Result", "✅", "Verdict Summary"),
-        ScreenPreviewItem("AI Explanation", "💡", "Why This Result"),
-        ScreenPreviewItem("Search History", "⏱️", "Saved Evidence")
-    )
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -85,7 +67,7 @@ fun PresentationBoardScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 20.dp, vertical = 36.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             item { Spacer(modifier = Modifier.height(8.dp)) }
 
@@ -120,7 +102,7 @@ fun PresentationBoardScreen(
 
                         Column {
                             Text(
-                                text = "InfoGuard",
+                                text = "TruthLens",
                                 color = Color.White,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.ExtraBold,
@@ -180,7 +162,7 @@ fun PresentationBoardScreen(
                             Spacer(modifier = Modifier.height(6.dp))
 
                             Text(
-                                text = "InfoGuard — AI-Powered Misinformation Checker",
+                                text = "TruthLens — AI-Powered Misinformation Checker",
                                 color = Color.White,
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.ExtraBold,
@@ -236,231 +218,94 @@ fun PresentationBoardScreen(
                 }
             }
 
-            // 3. Section 01: Key Product Screens Carousel
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "01 ",
-                            color = TealBright,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Key Product Screens",
-                            color = Color.White,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Text(
-                        text = "A complete overview of the user experience from onboarding to key verification.",
-                        color = Color(0xFF94A3B8),
-                        fontSize = 11.sp
-                    )
-
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        items(keyScreens) { screen ->
-                            Card(
-                                shape = RoundedCornerShape(18.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
-                                border = BorderStroke(1.dp, Color(0x3300E5FF)),
-                                modifier = Modifier
-                                    .size(width = 110.dp, height = 150.dp)
-                                    .clickable { onScreenSelect(screen.title) }
-                            ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center,
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(10.dp)
-                                ) {
-                                    Text(text = screen.iconEmoji, fontSize = 28.sp)
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    Text(
-                                        text = screen.title,
-                                        color = Color.White,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        textAlign = TextAlign.Center,
-                                        maxLines = 2
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = screen.subtitle,
-                                        color = Color(0xFF64748B),
-                                        fontSize = 9.sp,
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 4. Section 02: Design System Breakdown (3 Cards)
-            item {
-                Text(
-                    text = "02 Design System & Palette",
-                    color = Color.White,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            // Swatches Grid
+            // 3. Ask AI Assistant Section (Directly follows Hero section)
             item {
                 Card(
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
-                    border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+                    border = BorderStroke(1.dp, Color(0x3300E5FF)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        modifier = Modifier.padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0x3300E5FF))
+                            ) {
+                                Text(text = "✨", fontSize = 22.sp)
+                            }
+
+                            Spacer(modifier = Modifier.width(14.dp))
+
+                            Column {
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color(0x2600E5FF),
+                                    border = BorderStroke(1.dp, Color(0x4D00E5FF))
+                                ) {
+                                    Text(
+                                        text = "AI GUIDANCE",
+                                        color = CyanAccent,
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        letterSpacing = 0.5.sp,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                Text(
+                                    text = "Ask AI Assistant ✨",
+                                    color = Color.White,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                            }
+                        }
+
                         Text(
-                            text = "COLOR PALETTE",
+                            text = "Ask questions about news, misleading claims, and misinformation.",
                             color = Color(0xFF94A3B8),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.2.sp
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp
                         )
 
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        // Sample AI Prompt Chips
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            ColorSwatchBox(name = "Navy", hex = "#070D1A", color = DarkNavyStart, modifier = Modifier.weight(1f))
-                            ColorSwatchBox(name = "Primary", hex = "#00E5FF", color = CyanAccent, modifier = Modifier.weight(1f))
-                            ColorSwatchBox(name = "Teal", hex = "#2DD4BF", color = TealBright, modifier = Modifier.weight(1f))
+                            AiPromptSampleChip(text = "💬 \"Is this viral headline medically accurate?\"")
+                            AiPromptSampleChip(text = "💬 \"How do I spot deepfake image manipulation?\"")
                         }
 
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth()
+                        Spacer(modifier = Modifier.height(2.dp))
+
+                        // Ask AI Button
+                        Button(
+                            onClick = onAskAiClick,
+                            colors = ButtonDefaults.buttonColors(containerColor = TealBright),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
                         ) {
-                            ColorSwatchBox(name = "Purple", hex = "#7C3AED", color = Color(0xFF7C3AED), modifier = Modifier.weight(1f))
-                            ColorSwatchBox(name = "Warning", hex = "#F59E0B", color = WarningYellow, modifier = Modifier.weight(1f))
-                            ColorSwatchBox(name = "Alert", hex = "#F87171", color = LowTrustRed, modifier = Modifier.weight(1f))
-                        }
-                    }
-                }
-            }
-
-            // Typography & UI Components Row
-            item {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    // Typography Card
-                    Card(
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
-                        border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                text = "TYPOGRAPHY",
-                                color = Color(0xFF94A3B8),
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.2.sp
-                            )
-
-                            Text(
-                                text = "Inter",
-                                color = Color.White,
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-
-                            Text(
-                                text = "Aa Bold • Semi • Regular",
-                                color = CyanAccent,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-
-                            Text(
-                                text = "Clean, modern sans-serif typography.",
-                                color = Color(0xFF64748B),
-                                fontSize = 9.sp,
-                                lineHeight = 12.sp
-                            )
-                        }
-                    }
-
-                    // UI Components Card
-                    Card(
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
-                        border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                text = "UI BADGES",
-                                color = Color(0xFF94A3B8),
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.2.sp
-                            )
-
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = HighTrustGreen.copy(alpha = 0.2f),
-                                border = BorderStroke(1.dp, HighTrustGreen)
-                            ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = "MOSTLY TRUE",
-                                    color = HighTrustGreen,
-                                    fontSize = 7.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = WarningYellow.copy(alpha = 0.2f),
-                                border = BorderStroke(1.dp, WarningYellow)
-                            ) {
-                                Text(
-                                    text = "NEEDS CONTEXT",
-                                    color = WarningYellow,
-                                    fontSize = 7.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = LowTrustRed.copy(alpha = 0.2f),
-                                border = BorderStroke(1.dp, LowTrustRed)
-                            ) {
-                                Text(
-                                    text = "MISLEADING",
-                                    color = LowTrustRed,
-                                    fontSize = 7.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    text = "Ask AI ✨",
+                                    color = DarkNavyStart,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.ExtraBold
                                 )
                             }
                         }
@@ -468,7 +313,7 @@ fun PresentationBoardScreen(
                 }
             }
 
-            // 5. Footer Branding
+            // 4. Footer Branding
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -476,7 +321,7 @@ fun PresentationBoardScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "InfoGuard Mobile App",
+                        text = "TruthLens Mobile App",
                         color = Color(0xFF64748B),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium
@@ -497,32 +342,20 @@ fun PresentationBoardScreen(
 }
 
 @Composable
-fun ColorSwatchBox(name: String, hex: String, color: Color, modifier: Modifier = Modifier) {
+fun AiPromptSampleChip(text: String) {
     Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = color,
-        border = BorderStroke(1.dp, Color(0x33FFFFFF)),
-        modifier = modifier.height(44.dp)
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0x1F1E293B),
+        border = BorderStroke(1.dp, Color(0x22FFFFFF)),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(6.dp),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = name,
-                color = if (color == TealBright || color == CyanAccent) DarkNavyStart else Color.White,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = hex,
-                color = if (color == TealBright || color == CyanAccent) DarkNavyStart.copy(alpha = 0.7f) else Color(0xB3FFFFFF),
-                fontSize = 7.sp,
-                fontWeight = FontWeight.Medium
-            )
-        }
+        Text(
+            text = text,
+            color = Color.White,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+        )
     }
 }
 
