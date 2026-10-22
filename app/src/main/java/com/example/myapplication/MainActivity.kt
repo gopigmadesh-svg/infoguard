@@ -374,7 +374,7 @@ fun MainAppNav() {
             AppScreen.RESULT -> {
                 ResultScreen(
                     onBackClick = {
-                        currentScreen = AppScreen.HOME
+                     currentScreen = AppScreen.HOME
                     },
                     onViewDetailsClick = {
                         currentScreen = AppScreen.SOURCE_CREDIBILITY
