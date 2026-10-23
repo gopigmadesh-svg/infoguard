@@ -275,7 +275,7 @@ fun ProfileSetupScreen(
                 }
             }
 
-            // 5. Preferred Content (2x2 Card Grid)
+            // 5. Preferred Content (3-Card Grid Row)
             item {
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -320,14 +320,6 @@ fun ProfileSetupScreen(
                             },
                             modifier = Modifier.weight(1f)
                         )
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
                         ContentCard(
                             title = "Images",
                             iconEmoji = "🖼️",
@@ -335,16 +327,6 @@ fun ProfileSetupScreen(
                             onSelect = {
                                 if (selectedContentTypes.contains("Images")) selectedContentTypes.remove("Images")
                                 else selectedContentTypes.add("Images")
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                        ContentCard(
-                            title = "Video",
-                            iconEmoji = "🎥",
-                            isSelected = selectedContentTypes.contains("Video"),
-                            onSelect = {
-                                if (selectedContentTypes.contains("Video")) selectedContentTypes.remove("Video")
-                                else selectedContentTypes.add("Video")
                             },
                             modifier = Modifier.weight(1f)
                         )

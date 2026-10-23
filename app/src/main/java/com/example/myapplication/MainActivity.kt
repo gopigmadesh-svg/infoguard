@@ -2,6 +2,7 @@ package com.example.myapplication
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.Crossfade
@@ -9,10 +10,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.myapplication.ui.AnalysisScreen
@@ -48,6 +47,7 @@ import com.example.myapplication.ui.SourceCredibilityScreen
 import com.example.myapplication.ui.SplashScreen
 import com.example.myapplication.ui.TipsScreen
 import com.example.myapplication.ui.TopicInsightsScreen
+import com.example.myapplication.ui.TrustScoreExplanationScreen
 import com.example.myapplication.ui.UrlAnalysisScreen
 import com.example.myapplication.ui.WhyResultScreen
 import com.example.myapplication.ui.theme.MyApplicationTheme
@@ -72,6 +72,7 @@ enum class AppScreen {
     HELP_SUPPORT,
     PRIVACY_SECURITY,
     PRESENTATION_BOARD,
+    TRUST_SCORE_EXPLANATION,
     ANALYSIS,
     COMPLETE,
     RESULT,
@@ -106,7 +107,46 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainAppNav() {
-    var currentScreen by remember { mutableStateOf(AppScreen.SPLASH) }
+    val navigationStack = remember { mutableStateListOf(AppScreen.SPLASH) }
+    val currentScreen = navigationStack.lastOrNull() ?: AppScreen.HOME
+
+    fun navigateTo(screen: AppScreen) {
+        if (navigationStack.lastOrNull() != screen) {
+            navigationStack.add(screen)
+        }
+    }
+
+    fun switchTab(tabScreen: AppScreen) {
+        if (navigationStack.lastOrNull() != tabScreen) {
+            navigationStack.removeAll { it == tabScreen }
+            navigationStack.add(tabScreen)
+        }
+    }
+
+    fun goBack() {
+        if (navigationStack.size > 1) {
+            navigationStack.removeAt(navigationStack.lastIndex)
+        }
+    }
+
+    fun selectBottomTab(index: Int) {
+        when (index) {
+            0 -> switchTab(AppScreen.HOME)
+            1 -> switchTab(AppScreen.SCAN)
+            2 -> switchTab(AppScreen.TIPS)
+            3 -> switchTab(AppScreen.HISTORY)
+            4 -> switchTab(AppScreen.PROFILE)
+        }
+    }
+
+    // Android System Back Button Handler
+    BackHandler(
+        enabled = navigationStack.size > 1 &&
+                currentScreen != AppScreen.LOGIN &&
+                currentScreen != AppScreen.HOME
+    ) {
+        goBack()
+    }
 
     Crossfade(
         targetState = currentScreen,
@@ -117,54 +157,57 @@ fun MainAppNav() {
             AppScreen.SPLASH -> {
                 SplashScreen(
                     onSplashFinished = {
-                        currentScreen = AppScreen.ONBOARDING
+                        navigationStack.clear()
+                        navigationStack.add(AppScreen.ONBOARDING)
                     }
                 )
             }
             AppScreen.ONBOARDING -> {
                 OnboardingScreen(
                     onGetStartedClick = {
-                        currentScreen = AppScreen.LOGIN
+                        navigateTo(AppScreen.LOGIN)
                     }
                 )
             }
             AppScreen.LOGIN -> {
                 LoginScreen(
                     onLoginSuccess = {
-                        currentScreen = AppScreen.PROFILE_SETUP
+                        navigationStack.clear()
+                        navigationStack.add(AppScreen.HOME)
                     },
                     onNavigateToSignUp = {
-                        currentScreen = AppScreen.SIGN_UP
+                        navigateTo(AppScreen.SIGN_UP)
                     },
                     onForgotPasswordClick = {
-                        currentScreen = AppScreen.FORGOT_PASSWORD
+                        navigateTo(AppScreen.FORGOT_PASSWORD)
                     }
                 )
             }
             AppScreen.SIGN_UP -> {
                 SignUpScreen(
                     onSignUpSuccess = {
-                        currentScreen = AppScreen.PROFILE_SETUP
+                        navigationStack.clear()
+                        navigationStack.add(AppScreen.HOME)
                     },
                     onNavigateToLogin = {
-                        currentScreen = AppScreen.LOGIN
+                        goBack()
                     }
                 )
             }
             AppScreen.FORGOT_PASSWORD -> {
                 ForgotPasswordScreen(
                     onSendCodeClick = {
-                        currentScreen = AppScreen.OTP_VERIFICATION
+                        navigateTo(AppScreen.OTP_VERIFICATION)
                     },
                     onBackToLoginClick = {
-                        currentScreen = AppScreen.LOGIN
+                        goBack()
                     }
                 )
             }
             AppScreen.OTP_VERIFICATION -> {
                 OtpVerificationScreen(
                     onVerifyClick = {
-                        currentScreen = AppScreen.RESET_PASSWORD
+                        navigateTo(AppScreen.RESET_PASSWORD)
                     },
                     onResendClick = { }
                 )
@@ -172,110 +215,100 @@ fun MainAppNav() {
             AppScreen.RESET_PASSWORD -> {
                 ResetPasswordScreen(
                     onUpdatePasswordSuccess = {
-                        currentScreen = AppScreen.LOGIN
+                        navigationStack.clear()
+                        navigationStack.add(AppScreen.LOGIN)
                     }
                 )
             }
             AppScreen.PROFILE_SETUP -> {
                 ProfileSetupScreen(
                     onSavePreferences = {
-                        currentScreen = AppScreen.HOME
+                        if (navigationStack.contains(AppScreen.HOME)) {
+                            goBack()
+                        } else {
+                            navigationStack.clear()
+                            navigationStack.add(AppScreen.HOME)
+                        }
                     },
                     onBackClick = {
-                        currentScreen = AppScreen.LOGIN
+                        goBack()
                     }
                 )
             }
             AppScreen.HOME -> {
                 HomeScreen(
                     onBackToSplash = {
-                        currentScreen = AppScreen.PRESENTATION_BOARD
+                        navigateTo(AppScreen.PRESENTATION_BOARD)
                     },
                     onScanNewsClick = {
-                        currentScreen = AppScreen.SCAN
+                        navigateTo(AppScreen.SCAN)
                     },
                     onScanImageClick = {
-                        currentScreen = AppScreen.CAMERA_SCAN
+                        navigateTo(AppScreen.CAMERA_SCAN)
                     },
                     onCheckUrlClick = {
-                        currentScreen = AppScreen.URL_ANALYSIS
+                        navigateTo(AppScreen.URL_ANALYSIS)
                     },
                     onScanHistoryClick = {
-                        currentScreen = AppScreen.HISTORY
+                        navigateTo(AppScreen.HISTORY)
                     },
                     onTabSelected = { index ->
-                        when (index) {
-                            1 -> currentScreen = AppScreen.SCAN
-                            2 -> currentScreen = AppScreen.TIPS
-                            3 -> currentScreen = AppScreen.HISTORY
-                            4 -> currentScreen = AppScreen.PROFILE
-                        }
+                        selectBottomTab(index)
                     }
                 )
             }
             AppScreen.SCAN -> {
                 ScanScreen(
                     onBackClick = {
-                        currentScreen = AppScreen.HOME
+                        goBack()
                     },
                     onScanFinished = {
-                        currentScreen = AppScreen.ANALYSIS
+                        navigateTo(AppScreen.ANALYSIS)
                     },
                     onScanNewsClick = { _ ->
-                        currentScreen = AppScreen.ANALYSIS
+                        navigateTo(AppScreen.ANALYSIS)
                     },
                     onScanImageClick = { _, _ ->
-                        currentScreen = AppScreen.IMAGE_ANALYSIS
+                        navigateTo(AppScreen.IMAGE_ANALYSIS)
                     },
                     onScanUrlClick = { _ ->
-                        currentScreen = AppScreen.URL_ANALYSIS
+                        navigateTo(AppScreen.URL_ANALYSIS)
                     },
                     onTabSelected = { index ->
-                        when (index) {
-                            0 -> currentScreen = AppScreen.HOME
-                            1 -> currentScreen = AppScreen.SCAN
-                            2 -> currentScreen = AppScreen.TIPS
-                            3 -> currentScreen = AppScreen.HISTORY
-                            4 -> currentScreen = AppScreen.PROFILE
-                        }
+                        selectBottomTab(index)
                     }
                 )
             }
             AppScreen.TIPS -> {
                 TipsScreen(
                     onBackClick = {
-                        currentScreen = AppScreen.HOME
+                        goBack()
                     },
                     onTabSelected = { index ->
-                        when (index) {
-                            0 -> currentScreen = AppScreen.HOME
-                            1 -> currentScreen = AppScreen.SCAN
-                            3 -> currentScreen = AppScreen.HISTORY
-                            4 -> currentScreen = AppScreen.PROFILE
-                        }
+                        selectBottomTab(index)
                     }
                 )
             }
             AppScreen.CAMERA_SCAN -> {
                 CameraScanScreen(
                     onBackClick = {
-                        currentScreen = AppScreen.SCAN
+                        goBack()
                     },
                     onCaptureClick = {
-                        currentScreen = AppScreen.IMAGE_ANALYSIS
+                        navigateTo(AppScreen.IMAGE_ANALYSIS)
                     },
                     onGalleryClick = {
-                        currentScreen = AppScreen.IMAGE_ANALYSIS
+                        navigateTo(AppScreen.IMAGE_ANALYSIS)
                     }
                 )
             }
             AppScreen.IMAGE_ANALYSIS -> {
                 ImageAnalysisScreen(
                     onBackClick = {
-                        currentScreen = AppScreen.SCAN
+                        goBack()
                     },
                     onStartFullAnalysisClick = {
-                        currentScreen = AppScreen.ANALYSIS
+                        navigateTo(AppScreen.ANALYSIS)
                     },
                     onShareClick = { }
                 )
@@ -283,10 +316,10 @@ fun MainAppNav() {
             AppScreen.URL_ANALYSIS -> {
                 UrlAnalysisScreen(
                     onBackClick = {
-                        currentScreen = AppScreen.SCAN
+                        goBack()
                     },
                     onAnalyzePageClick = {
-                        currentScreen = AppScreen.ANALYSIS
+                        navigateTo(AppScreen.ANALYSIS)
                     },
                     onCopyLinkClick = { }
                 )
@@ -294,10 +327,10 @@ fun MainAppNav() {
             AppScreen.COMPARE_SOURCES -> {
                 CompareSourcesScreen(
                     onBackClick = {
-                        currentScreen = AppScreen.SOURCE_CREDIBILITY
+                        goBack()
                     },
                     onOpenReportClick = {
-                        currentScreen = AppScreen.REPORT
+                        navigateTo(AppScreen.REPORT)
                     },
                     onFilterClick = { }
                 )
@@ -305,99 +338,107 @@ fun MainAppNav() {
             AppScreen.TOPIC_INSIGHTS -> {
                 TopicInsightsScreen(
                     onBackClick = {
-                        currentScreen = AppScreen.PROFILE
+                        goBack()
                     },
                     onClaimClick = {
-                        currentScreen = AppScreen.RESULT
+                        navigateTo(AppScreen.TRUST_SCORE_EXPLANATION)
                     },
                     onTabSelected = { index ->
-                        when (index) {
-                            0 -> currentScreen = AppScreen.HOME
-                            1 -> currentScreen = AppScreen.SCAN
-                            2 -> currentScreen = AppScreen.TIPS
-                            3 -> currentScreen = AppScreen.HISTORY
-                            4 -> currentScreen = AppScreen.PROFILE
-                        }
+                        selectBottomTab(index)
                     }
                 )
             }
             AppScreen.HELP_SUPPORT -> {
                 HelpSupportScreen(
                     onBackClick = {
-                        currentScreen = AppScreen.PROFILE
+                        goBack()
                     },
                     onStartConversationClick = {
-                        currentScreen = AppScreen.CHAT
+                        navigateTo(AppScreen.CHAT)
                     },
                     onReportIssueClick = {
-                        currentScreen = AppScreen.ERROR
+                        navigateTo(AppScreen.ERROR)
                     }
                 )
             }
             AppScreen.PRIVACY_SECURITY -> {
                 PrivacySecurityScreen(
                     onBackClick = {
-                        currentScreen = AppScreen.SETTINGS
+                        goBack()
                     },
                     onDeleteAccountClick = {
-                        currentScreen = AppScreen.LOGOUT
+                        navigateTo(AppScreen.LOGOUT)
                     }
                 )
             }
             AppScreen.PRESENTATION_BOARD -> {
                 PresentationBoardScreen(
                     onBackClick = {
-                        currentScreen = AppScreen.HOME
+                        goBack()
                     }
+                )
+            }
+            AppScreen.TRUST_SCORE_EXPLANATION -> {
+                TrustScoreExplanationScreen(
+                    onBackClick = {
+                        goBack()
+                    },
+                    onViewReportClick = {
+                        navigateTo(AppScreen.REPORT)
+                    },
+                    onCompareSourcesClick = {
+                        navigateTo(AppScreen.COMPARE_SOURCES)
+                    },
+                    onShareClick = { }
                 )
             }
             AppScreen.ANALYSIS -> {
                 AnalysisScreen(
                     onBackClick = {
-                        currentScreen = AppScreen.SCAN
+                        goBack()
                     },
                     onAnalysisComplete = {
-                        currentScreen = AppScreen.COMPLETE
+                        navigateTo(AppScreen.COMPLETE)
                     }
                 )
             }
             AppScreen.COMPLETE -> {
                 CompleteScreen(
                     onViewResultClick = {
-                        currentScreen = AppScreen.RESULT
+                        navigateTo(AppScreen.TRUST_SCORE_EXPLANATION)
                     },
                     onBackToHomeClick = {
-                        currentScreen = AppScreen.HOME
+                        switchTab(AppScreen.HOME)
                     }
                 )
             }
             AppScreen.RESULT -> {
                 ResultScreen(
                     onBackClick = {
-                     currentScreen = AppScreen.HOME
+                        goBack()
                     },
                     onViewDetailsClick = {
-                        currentScreen = AppScreen.SOURCE_CREDIBILITY
+                        navigateTo(AppScreen.TRUST_SCORE_EXPLANATION)
                     },
                     onShareClick = {
-                        currentScreen = AppScreen.REPORT
+                        navigateTo(AppScreen.REPORT)
                     }
                 )
             }
             AppScreen.WHY_RESULT -> {
                 WhyResultScreen(
                     onBackClick = {
-                        currentScreen = AppScreen.RESULT
+                        goBack()
                     }
                 )
             }
             AppScreen.REPORT -> {
                 ReportScreen(
                     onBackClick = {
-                        currentScreen = AppScreen.RESULT
+                        goBack()
                     },
                     onDownloadClick = {
-                        currentScreen = AppScreen.SAVED_ARTICLES
+                        navigateTo(AppScreen.SAVED_ARTICLES)
                     },
                     onShareClick = { }
                 )
@@ -405,115 +446,122 @@ fun MainAppNav() {
             AppScreen.HISTORY -> {
                 HistoryScreen(
                     onBackClick = {
-                        currentScreen = AppScreen.HOME
+                        goBack()
                     },
                     onItemClick = {
-                        currentScreen = AppScreen.SOURCE_CREDIBILITY
+                        navigateTo(AppScreen.TRUST_SCORE_EXPLANATION)
                     },
                     onTabSelected = { index ->
-                        when (index) {
-                            0 -> currentScreen = AppScreen.HOME
-                            1 -> currentScreen = AppScreen.SCAN
-                            2 -> currentScreen = AppScreen.TIPS
-                            4 -> currentScreen = AppScreen.PROFILE
-                        }
+                        selectBottomTab(index)
                     },
                     onStartCheckingClick = {
-                        currentScreen = AppScreen.SCAN
+                        navigateTo(AppScreen.SCAN)
                     }
                 )
             }
             AppScreen.SAVED_ARTICLES -> {
                 SavedArticlesScreen(
                     onBackClick = {
-                        currentScreen = AppScreen.HISTORY
+                        goBack()
                     },
                     onArticleClick = {
-                        currentScreen = AppScreen.SOURCE_CREDIBILITY
+                        navigateTo(AppScreen.TRUST_SCORE_EXPLANATION)
                     }
                 )
             }
             AppScreen.CHAT -> {
                 ChatScreen(
                     onBackClick = {
-                        currentScreen = AppScreen.HELP_SUPPORT
+                        goBack()
                     }
                 )
             }
             AppScreen.REMINDERS -> {
                 RemindersScreen(
                     onBackClick = {
-                        currentScreen = AppScreen.SETTINGS
+                        goBack()
                     },
                     onAddReminderClick = {
-                        currentScreen = AppScreen.HOME
+                        switchTab(AppScreen.HOME)
                     }
                 )
             }
             AppScreen.NOTIFICATIONS -> {
                 NotificationsScreen(
                     onBackClick = {
-                        currentScreen = AppScreen.HOME
+                        goBack()
                     },
                     onNotificationClick = {
-                        currentScreen = AppScreen.RESULT
+                        navigateTo(AppScreen.TRUST_SCORE_EXPLANATION)
                     }
                 )
             }
             AppScreen.PROFILE -> {
                 ProfileScreen(
                     onNavigateToPersonalInfo = {
-                        currentScreen = AppScreen.PROFILE_SETUP
+                        navigateTo(AppScreen.PROFILE_SETUP)
                     },
                     onNavigateToSavedArticles = {
-                        currentScreen = AppScreen.SAVED_ARTICLES
+                        navigateTo(AppScreen.SAVED_ARTICLES)
                     },
                     onNavigateToHistory = {
-                        currentScreen = AppScreen.HISTORY
+                        navigateTo(AppScreen.HISTORY)
                     },
                     onNavigateToPrivacySecurity = {
-                        currentScreen = AppScreen.PRIVACY_SECURITY
+                        navigateTo(AppScreen.PRIVACY_SECURITY)
                     },
                     onNavigateToSettings = {
-                        currentScreen = AppScreen.SETTINGS
+                        navigateTo(AppScreen.SETTINGS)
                     },
                     onNavigateToHelpSupport = {
-                        currentScreen = AppScreen.HELP_SUPPORT
+                        navigateTo(AppScreen.HELP_SUPPORT)
                     },
                     onLogOutClick = {
-                        currentScreen = AppScreen.LOGOUT
+                        navigateTo(AppScreen.LOGOUT)
                     },
                     onTabSelected = { index ->
-                        when (index) {
-                            0 -> currentScreen = AppScreen.HOME
-                            1 -> currentScreen = AppScreen.SCAN
-                            2 -> currentScreen = AppScreen.TIPS
-                            3 -> currentScreen = AppScreen.HISTORY
-                            4 -> currentScreen = AppScreen.PROFILE
-                        }
+                        selectBottomTab(index)
                     }
                 )
             }
             AppScreen.SETTINGS -> {
                 SettingsScreen(
                     onBackClick = {
-                        currentScreen = AppScreen.PROFILE
+                        goBack()
+                    },
+                    onNavigateToPersonalInfo = {
+                        navigateTo(AppScreen.PROFILE_SETUP)
+                    },
+                    onNavigateToChangePassword = {
+                        navigateTo(AppScreen.RESET_PASSWORD)
+                    },
+                    onNavigateToPreferences = {
+                        navigateTo(AppScreen.PROFILE_SETUP)
+                    },
+                    onNavigateToNotifications = {
+                        navigateTo(AppScreen.NOTIFICATIONS)
                     },
                     onNavigateToReminders = {
-                        currentScreen = AppScreen.REMINDERS
+                        navigateTo(AppScreen.REMINDERS)
+                    },
+                    onNavigateToPrivacySettings = {
+                        navigateTo(AppScreen.PRIVACY_SECURITY)
+                    },
+                    onNavigateToAbout = {
+                        navigateTo(AppScreen.PRESENTATION_BOARD)
                     }
                 )
             }
             AppScreen.SOURCE_CREDIBILITY -> {
                 SourceCredibilityScreen(
                     onBackClick = {
-                        currentScreen = AppScreen.RESULT
+                        goBack()
                     },
                     onViewDetailsClick = {
-                        currentScreen = AppScreen.COMPARE_SOURCES
+                        navigateTo(AppScreen.COMPARE_SOURCES)
                     },
                     onRescanClick = {
-                        currentScreen = AppScreen.CAMERA_SCAN
+                        navigateTo(AppScreen.CAMERA_SCAN)
                     },
                     onShareClick = { }
                 )
@@ -521,27 +569,28 @@ fun MainAppNav() {
             AppScreen.EMPTY_STATE -> {
                 EmptyStateScreen(
                     onStartCheckingClick = {
-                        currentScreen = AppScreen.SCAN
+                        navigateTo(AppScreen.SCAN)
                     }
                 )
             }
             AppScreen.ERROR -> {
                 ErrorScreen(
                     onTryAgainClick = {
-                        currentScreen = AppScreen.ANALYSIS
+                        navigateTo(AppScreen.ANALYSIS)
                     },
                     onBackToScanClick = {
-                        currentScreen = AppScreen.SCAN
+                        navigateTo(AppScreen.SCAN)
                     }
                 )
             }
             AppScreen.LOGOUT -> {
                 LogoutScreen(
                     onConfirmLogoutClick = {
-                        currentScreen = AppScreen.LOGIN
+                        navigationStack.clear()
+                        navigationStack.add(AppScreen.LOGIN)
                     },
                     onCancelClick = {
-                        currentScreen = AppScreen.PROFILE
+                        goBack()
                     }
                 )
             }
