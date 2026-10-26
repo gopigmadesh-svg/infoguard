@@ -35,7 +35,8 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun PresentationBoardScreen(
-    onBackClick: () -> Unit = {}
+    onBackClick: () -> Unit = {},
+    onAskAiClick: () -> Unit = {}
 ) {
     Box(
         modifier = Modifier

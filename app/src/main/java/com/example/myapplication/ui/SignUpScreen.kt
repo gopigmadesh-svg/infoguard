@@ -1,5 +1,7 @@
 package com.example.myapplication.ui
 
+import android.util.Patterns
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -20,9 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -37,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -49,11 +49,66 @@ fun SignUpScreen(
     onSignUpSuccess: () -> Unit = {},
     onNavigateToLogin: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+
     var fullName by remember { mutableStateOf("Alex Morgan") }
     var email by remember { mutableStateOf("alex@example.com") }
     var password by remember { mutableStateOf("password123") }
     var confirmPassword by remember { mutableStateOf("password123") }
     var agreeToTerms by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    fun validateAndSignUp() {
+        val trimmedName = fullName.trim()
+        val trimmedEmail = email.trim()
+        val trimmedPass = password.trim()
+        val trimmedConfirm = confirmPassword.trim()
+
+        if (trimmedName.isEmpty()) {
+            errorMessage = "Please enter your full name."
+            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (trimmedEmail.isEmpty()) {
+            errorMessage = "Please enter your email address."
+            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (!Patterns.EMAIL_ADDRESS.matcher(trimmedEmail).matches()) {
+            errorMessage = "Please enter a valid email address."
+            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (trimmedPass.isEmpty()) {
+            errorMessage = "Please enter a password."
+            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (trimmedPass.length < 6) {
+            errorMessage = "Password must be at least 6 characters long."
+            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (trimmedPass != trimmedConfirm) {
+            errorMessage = "Passwords do not match."
+            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (!agreeToTerms) {
+            errorMessage = "Please agree to the Terms & Privacy Policy to continue."
+            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        errorMessage = null
+        onSignUpSuccess()
+    }
 
     Box(
         modifier = Modifier
@@ -171,15 +226,14 @@ fun SignUpScreen(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
-                        text = "Build better information habits with your personal workspace.",
+                        text = "Sign up to access AI verification tools and save evidence.",
                         color = Color(0xFF94A3B8),
-                        fontSize = 13.sp,
-                        lineHeight = 18.sp
+                        fontSize = 13.sp
                     )
                 }
             }
 
-            // 3. Input Form Fields
+            // 3. Form Input Fields
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     // Full Name
@@ -194,7 +248,10 @@ fun SignUpScreen(
                         Spacer(modifier = Modifier.height(6.dp))
                         OutlinedTextField(
                             value = fullName,
-                            onValueChange = { fullName = it },
+                            onValueChange = {
+                                fullName = it
+                                errorMessage = null
+                            },
                             singleLine = true,
                             leadingIcon = {
                                 Box(modifier = Modifier.size(20.dp)) {
@@ -228,7 +285,10 @@ fun SignUpScreen(
                         Spacer(modifier = Modifier.height(6.dp))
                         OutlinedTextField(
                             value = email,
-                            onValueChange = { email = it },
+                            onValueChange = {
+                                email = it
+                                errorMessage = null
+                            },
                             singleLine = true,
                             leadingIcon = {
                                 Box(modifier = Modifier.size(20.dp)) {
@@ -262,7 +322,10 @@ fun SignUpScreen(
                         Spacer(modifier = Modifier.height(6.dp))
                         OutlinedTextField(
                             value = password,
-                            onValueChange = { password = it },
+                            onValueChange = {
+                                password = it
+                                errorMessage = null
+                            },
                             singleLine = true,
                             visualTransformation = PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -298,7 +361,10 @@ fun SignUpScreen(
                         Spacer(modifier = Modifier.height(6.dp))
                         OutlinedTextField(
                             value = confirmPassword,
-                            onValueChange = { confirmPassword = it },
+                            onValueChange = {
+                                confirmPassword = it
+                                errorMessage = null
+                            },
                             singleLine = true,
                             visualTransformation = PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -321,25 +387,44 @@ fun SignUpScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
+
+                    if (errorMessage != null) {
+                        Text(
+                            text = errorMessage!!,
+                            color = LowTrustRed,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
 
-            // 4. Terms and Privacy Policy Checkbox
+            // 4. Terms & Privacy Checkbox Row
             item {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { agreeToTerms = !agreeToTerms }
                 ) {
-                    Checkbox(
-                        checked = agreeToTerms,
-                        onCheckedChange = { agreeToTerms = it },
-                        colors = CheckboxDefaults.colors(
-                            checkedColor = TealBright,
-                            uncheckedColor = Color(0xFF64748B),
-                            checkmarkColor = DarkNavyStart
-                        )
-                    )
-                    Row {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (agreeToTerms) TealBright else Color(0xFF0F172A),
+                        border = BorderStroke(1.dp, if (agreeToTerms) TealBright else Color(0x33FFFFFF)),
+                        modifier = Modifier.size(20.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            if (agreeToTerms) {
+                                Canvas(modifier = Modifier.size(10.dp)) {
+                                    drawCheckmarkPath(color = DarkNavyStart, strokeWidth = 2.5f)
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(10.dp))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = "I agree to the ",
                             color = Color(0xFF94A3B8),
@@ -369,7 +454,7 @@ fun SignUpScreen(
             // 5. Create Account Button
             item {
                 Button(
-                    onClick = onSignUpSuccess,
+                    onClick = { validateAndSignUp() },
                     colors = ButtonDefaults.buttonColors(containerColor = TealBright),
                     shape = RoundedCornerShape(18.dp),
                     modifier = Modifier
@@ -385,9 +470,7 @@ fun SignUpScreen(
                 }
             }
 
-
-
-            // 7. Footer: Already have an account? Login
+            // 6. Footer: Already have an account? Login
             item {
                 Row(
                     horizontalArrangement = Arrangement.Center,

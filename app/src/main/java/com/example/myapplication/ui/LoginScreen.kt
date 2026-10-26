@@ -1,5 +1,7 @@
 package com.example.myapplication.ui
 
+import android.util.Patterns
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -19,7 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -34,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -48,8 +50,43 @@ fun LoginScreen(
     onNavigateToSignUp: () -> Unit = {},
     onForgotPasswordClick: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+
     var email by remember { mutableStateOf("alex@example.com") }
     var password by remember { mutableStateOf("password123") }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    fun validateAndLogin() {
+        val trimmedEmail = email.trim()
+        val trimmedPass = password.trim()
+
+        if (trimmedEmail.isEmpty()) {
+            errorMessage = "Please enter your email address."
+            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (!Patterns.EMAIL_ADDRESS.matcher(trimmedEmail).matches()) {
+            errorMessage = "Please enter a valid email address."
+            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (trimmedPass.isEmpty()) {
+            errorMessage = "Please enter your password."
+            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (trimmedPass.length < 6) {
+            errorMessage = "Password must be at least 6 characters long."
+            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        errorMessage = null
+        onLoginSuccess()
+    }
 
     Box(
         modifier = Modifier
@@ -186,7 +223,10 @@ fun LoginScreen(
 
                 OutlinedTextField(
                     value = email,
-                    onValueChange = { email = it },
+                    onValueChange = {
+                        email = it
+                        errorMessage = null
+                    },
                     singleLine = true,
                     leadingIcon = {
                         Box(modifier = Modifier.size(20.dp)) {
@@ -221,7 +261,10 @@ fun LoginScreen(
 
                 OutlinedTextField(
                     value = password,
-                    onValueChange = { password = it },
+                    onValueChange = {
+                        password = it
+                        errorMessage = null
+                    },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -244,6 +287,16 @@ fun LoginScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                if (errorMessage != null) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = errorMessage!!,
+                        color = LowTrustRed,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Forgot Password Link
@@ -262,7 +315,7 @@ fun LoginScreen(
 
                 // Login CTA Button
                 Button(
-                    onClick = onLoginSuccess,
+                    onClick = { validateAndLogin() },
                     colors = ButtonDefaults.buttonColors(containerColor = TealBright),
                     shape = RoundedCornerShape(18.dp),
                     modifier = Modifier
@@ -276,7 +329,6 @@ fun LoginScreen(
                         fontWeight = FontWeight.Bold
                     )
                 }
-
             }
 
             // 3. Footer Link: Sign Up

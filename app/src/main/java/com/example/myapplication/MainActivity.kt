@@ -240,6 +240,9 @@ fun MainAppNav() {
                     onBackToSplash = {
                         navigateTo(AppScreen.PRESENTATION_BOARD)
                     },
+                    onAskAiClick = {
+                        navigateTo(AppScreen.CHAT)
+                    },
                     onScanNewsClick = {
                         navigateTo(AppScreen.SCAN)
                     },
@@ -375,6 +378,9 @@ fun MainAppNav() {
                 PresentationBoardScreen(
                     onBackClick = {
                         goBack()
+                    },
+                    onAskAiClick = {
+                        navigateTo(AppScreen.CHAT)
                     }
                 )
             }

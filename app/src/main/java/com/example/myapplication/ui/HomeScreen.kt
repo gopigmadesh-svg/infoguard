@@ -55,6 +55,7 @@ data class RecentScanItem(
 @Composable
 fun HomeScreen(
     onBackToSplash: () -> Unit = {},
+    onAskAiClick: () -> Unit = {},
     onScanNewsClick: () -> Unit = {},
     onScanImageClick: () -> Unit = {},
     onCheckUrlClick: () -> Unit = {},
@@ -162,7 +163,7 @@ fun HomeScreen(
                             shadowElevation = 8.dp,
                             modifier = Modifier
                                 .size(width = 72.dp, height = 48.dp)
-                                .clickable { onBackToSplash() }
+                                .clickable { onAskAiClick() }
                         ) {
                             Box(
                                 contentAlignment = Alignment.Center,

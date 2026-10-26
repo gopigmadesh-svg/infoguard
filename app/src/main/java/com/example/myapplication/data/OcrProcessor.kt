@@ -6,11 +6,10 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.InputStream
 import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
-import kotlin.coroutines.suspendCoroutine
 
 object OcrProcessor {
 
@@ -46,7 +45,7 @@ object OcrProcessor {
     }
 
     suspend fun extractTextFromImage(context: Context, uri: Uri): String = withContext(Dispatchers.IO) {
-        suspendCoroutine { continuation ->
+        suspendCancellableCoroutine { continuation ->
             try {
                 val image = InputImage.fromFilePath(context, uri)
                 val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
@@ -54,17 +53,23 @@ object OcrProcessor {
                 recognizer.process(image)
                     .addOnSuccessListener { visionText ->
                         val text = visionText.text.trim()
-                        if (text.isNotBlank()) {
-                            continuation.resume(text)
-                        } else {
-                            continuation.resume("No readable text found in the image. Visual content analysis completed.")
+                        if (continuation.isActive) {
+                            if (text.isNotBlank()) {
+                                continuation.resume(text)
+                            } else {
+                                continuation.resume("No readable text found in the image. Visual content analysis completed.")
+                            }
                         }
                     }
                     .addOnFailureListener { exception ->
-                        continuation.resume("Text recognition failed: ${exception.localizedMessage ?: "Unknown error"}. Proceeding with visual image analysis.")
+                        if (continuation.isActive) {
+                            continuation.resume("Text recognition failed: ${exception.localizedMessage ?: "Unknown error"}. Proceeding with visual image analysis.")
+                        }
                     }
             } catch (e: Exception) {
-                continuation.resume("Could not read image file: ${e.localizedMessage ?: "File error"}")
+                if (continuation.isActive) {
+                    continuation.resume("Could not read image file: ${e.localizedMessage ?: "File error"}")
+                }
             }
         }
     }
