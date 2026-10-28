@@ -51,6 +51,13 @@ dependencies {
     // Coil Compose for Image URI rendering
     implementation("io.coil-kt:coil-compose:2.6.0")
 
+    // Networking: OkHttp, Gson & Retrofit
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging)
+    implementation(libs.gson)
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.converter.gson)
+
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

@@ -1,5 +1,9 @@
 package com.example.myapplication.ui
 
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -18,7 +22,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -35,16 +38,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import coil.compose.AsyncImage
+import com.example.myapplication.data.OcrProcessor
+import java.io.File
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -58,10 +65,49 @@ fun ProfileScreen(
     onLogOutClick: () -> Unit = {},
     onTabSelected: (Int) -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val isPreview = LocalInspectionMode.current
+
     val allInterests = listOf("SCIENCE", "TECHNOLOGY", "HEALTH", "CURRENT AFFAIRS")
     var selectedInterests by remember { mutableStateOf(setOf("SCIENCE", "TECHNOLOGY", "HEALTH")) }
     var selectedLanguage by remember { mutableStateOf("English (US)") }
     var showLanguageDialog by remember { mutableStateOf(false) }
+
+    // Persistent Profile Image Uri State
+    var profileImageUri by remember {
+        mutableStateOf<Uri?>(
+            File(context.filesDir, "truthlens_profile_avatar.jpg").let { file ->
+                if (file.exists()) Uri.fromFile(file) else null
+            }
+        )
+    }
+
+    // Gallery Photo Picker Launcher
+    val galleryLauncher = if (!isPreview) {
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.GetContent()
+        ) { sourceUri: Uri? ->
+            if (sourceUri != null) {
+                val validation = OcrProcessor.validateImageUri(context, sourceUri)
+                if (validation.isValid) {
+                    try {
+                        val destFile = File(context.filesDir, "truthlens_profile_avatar.jpg")
+                        context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                            destFile.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                        profileImageUri = Uri.fromFile(destFile)
+                        Toast.makeText(context, "Profile picture updated successfully!", Toast.LENGTH_SHORT).show()
+                    } catch (_: Exception) {
+                        Toast.makeText(context, "Could not save profile picture.", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    Toast.makeText(context, validation.errorMessage, Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    } else null
 
     Box(
         modifier = Modifier
@@ -142,49 +188,58 @@ fun ProfileScreen(
                 item {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onNavigateToPersonalInfo() }
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Box(contentAlignment = Alignment.BottomEnd) {
-                            // Avatar Box
+                            // Circular Profile Picture Avatar
                             Surface(
-                                shape = RoundedCornerShape(26.dp),
+                                shape = CircleShape,
                                 color = Color.Unspecified,
-                                border = BorderStroke(1.5.dp, Color(0x66A78BFA)),
+                                border = BorderStroke(2.dp, CyanAccent),
                                 shadowElevation = 12.dp,
-                                modifier = Modifier.size(82.dp)
+                                modifier = Modifier
+                                    .size(86.dp)
+                                    .clickable { galleryLauncher?.launch("image/*") }
                             ) {
-                                Box(
-                                    contentAlignment = Alignment.Center,
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(
-                                            brush = Brush.linearGradient(
-                                                colors = listOf(PurpleCardStart, PurpleCardEnd)
-                                            )
-                                        )
-                                ) {
-                                    Text(
-                                        text = "AM",
-                                        color = Color.White,
-                                        fontSize = 28.sp,
-                                        fontWeight = FontWeight.ExtraBold
+                                if (profileImageUri != null) {
+                                    AsyncImage(
+                                        model = profileImageUri,
+                                        contentDescription = "Profile Picture",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
                                     )
+                                } else {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(
+                                                brush = Brush.linearGradient(
+                                                    colors = listOf(PurpleCardStart, PurpleCardEnd)
+                                                )
+                                            )
+                                    ) {
+                                        Text(
+                                            text = "AM",
+                                            color = Color.White,
+                                            fontSize = 28.sp,
+                                            fontWeight = FontWeight.ExtraBold
+                                        )
+                                    }
                                 }
                             }
 
-                            // Small verified badge icon
+                            // Small Camera / Edit Badge Icon
                             Surface(
                                 shape = CircleShape,
-                                color = HighTrustGreen,
+                                color = TealBright,
                                 border = BorderStroke(1.5.dp, Color.White),
-                                modifier = Modifier.size(22.dp)
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .clickable { galleryLauncher?.launch("image/*") }
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Canvas(modifier = Modifier.size(10.dp)) {
-                                        drawCheckmarkPath(color = DarkNavyStart, strokeWidth = 3f)
-                                    }
+                                    Text(text = "📷", fontSize = 12.sp)
                                 }
                             }
                         }
@@ -195,7 +250,8 @@ fun ProfileScreen(
                             text = "Alex Morgan",
                             color = Color.White,
                             fontSize = 22.sp,
-                            fontWeight = FontWeight.ExtraBold
+                            fontWeight = FontWeight.ExtraBold,
+                            modifier = Modifier.clickable { onNavigateToPersonalInfo() }
                         )
 
                         Spacer(modifier = Modifier.height(2.dp))
@@ -203,7 +259,8 @@ fun ProfileScreen(
                         Text(
                             text = "alex.morgan@example.com",
                             color = Color(0xFF94A3B8),
-                            fontSize = 12.sp
+                            fontSize = 12.sp,
+                            modifier = Modifier.clickable { onNavigateToPersonalInfo() }
                         )
 
                         Spacer(modifier = Modifier.height(6.dp))
@@ -212,7 +269,8 @@ fun ProfileScreen(
                         Surface(
                             shape = RoundedCornerShape(10.dp),
                             color = Color(0x2600E5FF),
-                            border = BorderStroke(1.dp, Color(0x4D00E5FF))
+                            border = BorderStroke(1.dp, Color(0x4D00E5FF)),
+                            modifier = Modifier.clickable { onNavigateToPersonalInfo() }
                         ) {
                             Text(
                                 text = "🏷️ Standard Account • Active",
