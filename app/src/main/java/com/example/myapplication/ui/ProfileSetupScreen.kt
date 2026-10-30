@@ -52,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.myapplication.data.network.model.UserDto
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -474,9 +475,23 @@ fun ProfileSetupScreen(
                                     notificationsEnabled = alertEnabled
                                 )
                                 result.onSuccess {
+                                    sessionManager.saveUser(
+                                        UserDto(
+                                            id = currentUserId,
+                                            name = name,
+                                            email = sessionManager.currentUserEmail
+                                        )
+                                    )
                                     Toast.makeText(context, "Preferences saved successfully!", Toast.LENGTH_SHORT).show()
                                     onSavePreferences()
                                 }.onFailure {
+                                    sessionManager.saveUser(
+                                        UserDto(
+                                            id = currentUserId,
+                                            name = name,
+                                            email = sessionManager.currentUserEmail
+                                        )
+                                    )
                                     Toast.makeText(context, "Preferences saved locally.", Toast.LENGTH_SHORT).show()
                                     onSavePreferences()
                                 }

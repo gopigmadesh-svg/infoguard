@@ -1,5 +1,6 @@
 package com.example.myapplication.data
 
+import com.example.myapplication.data.network.client.NetworkConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -38,18 +39,13 @@ object AiChatRepository {
         }
 
         val trimmedKey = apiKey.trim()
-        val trimmedUrl = customBackendUrl.trim()
-
-        // 1. Try Custom Backend Proxy / API if URL is provided
-        if (trimmedUrl.isNotEmpty()) {
-            try {
-                return@withContext callCustomBackend(trimmedUrl, history, userMessage)
-            } catch (e: Exception) {
-                return@withContext "Error connecting to Custom Backend ($trimmedUrl): ${e.localizedMessage ?: e.message}. Check backend server status."
-            }
+        val trimmedUrl = if (customBackendUrl.isNotBlank()) {
+            customBackendUrl.trim()
+        } else {
+            "${NetworkConfig.currentBaseUrl}ai_chat.php"
         }
 
-        // 2. Try Gemini API if key is provided
+        // 1. Try Gemini API if key is provided
         if (trimmedKey.isNotEmpty() && selectedProvider == AiProvider.GEMINI) {
             try {
                 return@withContext callGeminiApi(trimmedKey, history, userMessage)
@@ -58,7 +54,7 @@ object AiChatRepository {
             }
         }
 
-        // 3. Try OpenAI API if key is provided
+        // 2. Try OpenAI API if key is provided
         if (trimmedKey.isNotEmpty() && selectedProvider == AiProvider.OPENAI) {
             try {
                 return@withContext callOpenAiApi(trimmedKey, history, userMessage)
@@ -67,8 +63,13 @@ object AiChatRepository {
             }
         }
 
-        // 4. Default Setup Guidance if no key is supplied
-        return@withContext generateFallbackFactCheckGuidance(userMessage)
+        // 3. Try Backend AI Endpoint (http://127.0.0.1/Truthlense_backened/ai_chat.php)
+        try {
+            return@withContext callCustomBackend(trimmedUrl, history, userMessage)
+        } catch (e: Exception) {
+            // 4. Fallback Fact-Check Guidance if backend endpoint is unreachable
+            return@withContext generateFallbackFactCheckGuidance(userMessage)
+        }
     }
 
     private fun callGeminiApi(

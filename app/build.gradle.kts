@@ -44,6 +44,8 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+    implementation("androidx.cardview:cardview:1.0.0")
 
     // ML Kit Text Recognition
     implementation("com.google.mlkit:text-recognition:16.0.1")
@@ -66,3 +68,42 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
+
+// Automatically configure ADB reverse port forwarding for XAMPP Apache
+@UntrackedTask(because = "Interacts dynamically with attached USB device via ADB")
+abstract class EnsureAdbReverseTask : DefaultTask() {
+    @TaskAction
+    fun run() {
+        val userHome = System.getProperty("user.home")
+        val adb = File(userHome, "AppData/Local/Android/Sdk/platform-tools/adb.exe")
+        if (adb.exists()) {
+            try {
+                val devicesProcess = ProcessBuilder(adb.absolutePath, "devices").start()
+                val devicesOutput = devicesProcess.inputStream.bufferedReader().readText()
+                devicesProcess.waitFor()
+                val hasDevice = devicesOutput.lines().any { line ->
+                    line.trim().isNotEmpty() &&
+                    !line.startsWith("List of devices") &&
+                    line.contains("\tdevice")
+                }
+                if (hasDevice) {
+                    val reverseProcess = ProcessBuilder(adb.absolutePath, "reverse", "tcp:80", "tcp:80").start()
+                    reverseProcess.waitFor()
+                    println(">> [TruthLens] ADB reverse port forwarding active: tcp:80 -> tcp:80")
+                }
+            } catch (e: Exception) {
+                println(">> [TruthLens] ADB reverse notice: ${e.message}")
+            }
+        }
+    }
+}
+
+tasks.register<EnsureAdbReverseTask>("ensureAdbReverse") {
+    group = "development"
+    description = "Automatically configures ADB reverse port forwarding for XAMPP Apache (port 80)"
+}
+
+tasks.matching { it.name == "preBuild" || it.name.startsWith("install") }.configureEach {
+    finalizedBy("ensureAdbReverse")
+}
+

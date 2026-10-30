@@ -24,10 +24,20 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
+import com.example.myapplication.data.network.model.RecentScanDto
+import com.example.myapplication.data.network.model.UserDto
+import com.example.myapplication.data.network.repository.AnalysisRepository
+import com.example.myapplication.data.network.repository.ProfileRepository
+import com.example.myapplication.data.network.repository.SessionManager
+import kotlin.math.roundToInt
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -64,30 +74,93 @@ fun HomeScreen(
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
 
-    val recentScans = remember {
-        listOf(
-            RecentScanItem(
-                title = "Lorem ipsum story",
-                typeAndDate = "Article • Today",
-                statusText = "VERIFIED",
-                statusColor = HighTrustGreen,
-                iconEmoji = "📄"
-            ),
-            RecentScanItem(
-                title = "Global warming is a hoax",
-                typeAndDate = "Claim • Yesterday",
-                statusText = "FALSE",
-                statusColor = LowTrustRed,
-                iconEmoji = "🚨"
-            ),
-            RecentScanItem(
-                title = "New vaccine news",
-                typeAndDate = "Article • 2d ago",
-                statusText = "UNCERTAIN",
-                statusColor = WarningYellow,
-                iconEmoji = "📄"
-            )
+    val context = LocalContext.current
+    val isPreview = LocalInspectionMode.current
+    val sessionManager = remember { SessionManager(context) }
+    val profileRepo = remember { ProfileRepository() }
+    val analysisRepo = remember { AnalysisRepository() }
+
+    val currentUserId = remember(sessionManager.currentUserId) { sessionManager.currentUserId }
+    var displayName by remember(sessionManager.currentUserName, sessionManager.currentUserEmail) {
+        mutableStateOf(
+            sessionManager.currentUserName.ifEmpty {
+                sessionManager.currentUserEmail.substringBefore("@").ifEmpty { "User" }
+            }
         )
+    }
+
+    var userScans by remember(currentUserId) { mutableStateOf<List<RecentScanDto>>(emptyList()) }
+
+    LaunchedEffect(currentUserId) {
+        if (!isPreview && currentUserId > 0) {
+            val result = profileRepo.getProfile(currentUserId)
+            result.onSuccess { profile ->
+                if (profile.name.isNotBlank()) {
+                    displayName = profile.name
+                    sessionManager.saveUser(
+                        UserDto(
+                            id = currentUserId,
+                            name = profile.name,
+                            email = profile.email.ifEmpty { sessionManager.currentUserEmail }
+                        )
+                    )
+                }
+            }
+
+            val scanResult = analysisRepo.getRecentScans(currentUserId, limit = 50)
+            scanResult.onSuccess { scans ->
+                userScans = scans
+            }
+        }
+    }
+
+    val hasHistory = userScans.isNotEmpty()
+    val calculatedScore = if (hasHistory) {
+        userScans.map { it.trustScore }.average().roundToInt()
+    } else null
+
+    val (statusLabel, statusColor, explanationText) = when {
+        !hasHistory -> Triple(
+            "NO CHECKS YET",
+            TealBright,
+            "Perform your first claim check to start tracking your personal trust score."
+        )
+        calculatedScore != null && calculatedScore >= 75 -> Triple(
+            "RELIABLE",
+            HighTrustGreen,
+            "Your recent checks show strong credibility patterns."
+        )
+        calculatedScore != null && calculatedScore >= 50 -> Triple(
+            "QUESTIONABLE",
+            WarningYellow,
+            "Your recent checks show mixed credibility. Exercise caution."
+        )
+        else -> Triple(
+            "UNVERIFIED",
+            LowTrustRed,
+            "Your recent checks indicate potential misinformation. Cross-verify sources."
+        )
+    }
+
+    val displayRecentScans = remember(userScans) {
+        if (userScans.isNotEmpty()) {
+            userScans.take(5).map { scan ->
+                val (color, emoji) = when {
+                    scan.trustScore >= 75 -> HighTrustGreen to "📄"
+                    scan.trustScore >= 50 -> WarningYellow to "📄"
+                    else -> LowTrustRed to "🚨"
+                }
+                RecentScanItem(
+                    title = scan.title,
+                    typeAndDate = "${scan.scanType.replaceFirstChar { it.uppercase() }} • ${if (scan.createdAt.length >= 10) scan.createdAt.take(10) else scan.createdAt}",
+                    statusText = scan.verdict.uppercase(),
+                    statusColor = color,
+                    iconEmoji = emoji
+                )
+            }
+        } else {
+            emptyList()
+        }
     }
 
     Box(
@@ -141,7 +214,7 @@ fun HomeScreen(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Hello, Alex 👋",
+                                text = "Hello, $displayName 👋",
                                 color = Color.White,
                                 fontSize = 28.sp,
                                 fontWeight = FontWeight.ExtraBold,
@@ -149,7 +222,7 @@ fun HomeScreen(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Way to fact-check today, 84%.",
+                                text = if (hasHistory) "Personal trust score active." else "Start fact-checking claims today.",
                                 color = Color(0xFF94A3B8),
                                 fontSize = 12.sp
                             )
@@ -213,7 +286,7 @@ fun HomeScreen(
 
                                 Row(verticalAlignment = Alignment.Bottom) {
                                     Text(
-                                        text = "92",
+                                        text = if (hasHistory) "$calculatedScore" else "--",
                                         color = Color.White,
                                         fontSize = 38.sp,
                                         fontWeight = FontWeight.ExtraBold
@@ -231,12 +304,12 @@ fun HomeScreen(
 
                                 Surface(
                                     shape = RoundedCornerShape(12.dp),
-                                    color = HighTrustGreen.copy(alpha = 0.18f),
-                                    border = BorderStroke(1.dp, HighTrustGreen.copy(alpha = 0.5f))
+                                    color = statusColor.copy(alpha = 0.18f),
+                                    border = BorderStroke(1.dp, statusColor.copy(alpha = 0.5f))
                                 ) {
                                     Text(
-                                        text = "RELIABLE",
-                                        color = HighTrustGreen,
+                                        text = statusLabel,
+                                        color = statusColor,
                                         fontSize = 9.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         letterSpacing = 1.sp,
@@ -247,7 +320,7 @@ fun HomeScreen(
                                 Spacer(modifier = Modifier.height(10.dp))
 
                                 Text(
-                                    text = "Your recent checks show strong credibility patterns.",
+                                    text = explanationText,
                                     color = Color(0xFF94A3B8),
                                     fontSize = 11.sp,
                                     lineHeight = 15.sp
@@ -385,8 +458,26 @@ fun HomeScreen(
                 }
 
                 // Recent Scans List
-                items(recentScans) { item ->
-                    RecentScanCard(item)
+                if (displayRecentScans.isNotEmpty()) {
+                    items(displayRecentScans) { scanItem ->
+                        RecentScanCard(scanItem)
+                    }
+                } else {
+                    item {
+                        Card(
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0x201E293B)),
+                            border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "No recent checks yet. Perform a news scan to build your history.",
+                                color = Color(0xFF94A3B8),
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        }
+                    }
                 }
 
                 item { Spacer(modifier = Modifier.height(20.dp)) }
