@@ -50,7 +50,7 @@ class SessionManager(context: Context) {
         get() = prefs.getString(KEY_AUTH_TOKEN, null)
 
     fun logout() {
-        prefs.edit().clear().apply()
+        prefs.edit().clear().commit()
     }
 }
 

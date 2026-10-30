@@ -102,9 +102,26 @@ object DirectApiClient {
                 }
             }
         } catch (ioEx: IOException) {
+            val details = ioEx.localizedMessage ?: "Connection error"
+            val isConnRefused = details.contains("127.0.0.1") ||
+                    details.contains("failed to connect", ignoreCase = true) ||
+                    details.contains("refused", ignoreCase = true) ||
+                    details.contains("ECONNREFUSED", ignoreCase = true)
+
+            val helpMsg = if (isConnRefused) {
+                if (NetworkConfig.isEmulator) {
+                    "Cannot reach backend at 10.0.2.2:80. Ensure XAMPP Apache is running on your PC."
+                } else {
+                    "Cannot connect to backend (connection refused at 127.0.0.1:80).\n• Keep USB connected & run 'ensure_adb_reverse.bat' on your PC (or 'adb reverse tcp:80 tcp:80').\n• Ensure XAMPP Apache is running on port 80."
+                }
+            } else if (ioEx is java.net.SocketTimeoutException) {
+                "Connection timed out. Please ensure XAMPP Apache is responding."
+            } else {
+                "Network connection failed: $details"
+            }
             ApiResponse(
                 success = false,
-                message = "Network connection failed: ${ioEx.localizedMessage ?: "Check backend status"}",
+                message = helpMsg,
                 data = null
             )
         }

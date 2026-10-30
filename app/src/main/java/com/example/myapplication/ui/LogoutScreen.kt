@@ -25,6 +25,11 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import com.example.myapplication.data.network.repository.AuthRepository
+import com.example.myapplication.data.network.repository.SessionManager
+import com.example.myapplication.ui.viewmodel.AuthViewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,9 +44,17 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun LogoutScreen(
+    authViewModel: AuthViewModel? = null,
     onConfirmLogoutClick: () -> Unit = {},
     onCancelClick: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val viewModel = authViewModel ?: remember {
+        val sessionManager = SessionManager(context)
+        AuthViewModel(AuthRepository(sessionManager))
+    }
+    val userName = viewModel.currentUserName.ifEmpty { "Alex Morgan" }
+    val userEmail = viewModel.currentUserEmail.ifEmpty { "alex.morgan@example.com" }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -215,14 +228,14 @@ fun LogoutScreen(
 
                                 Column {
                                     Text(
-                                        text = "Alex Morgan",
+                                        text = userName,
                                         color = Color.White,
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = "alex.morgan@example.com",
+                                        text = userEmail,
                                         color = Color(0xFF64748B),
                                         fontSize = 11.sp
                                     )
@@ -283,7 +296,7 @@ fun LogoutScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Button(
-                        onClick = onConfirmLogoutClick,
+                        onClick = { viewModel.logout(onConfirmLogoutClick) },
                         colors = ButtonDefaults.buttonColors(containerColor = TealBright),
                         shape = RoundedCornerShape(18.dp),
                         modifier = Modifier

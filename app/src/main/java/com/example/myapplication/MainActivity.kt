@@ -17,6 +17,11 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.example.myapplication.ui.AnalysisScreen
 import com.example.myapplication.ui.CameraScanScreen
 import com.example.myapplication.ui.ChatScreen
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalContext
+import com.example.myapplication.data.network.repository.AuthRepository
+import com.example.myapplication.data.network.repository.SessionManager
+import com.example.myapplication.ui.viewmodel.AuthViewModel
 import com.example.myapplication.ui.CompareSourcesScreen
 import com.example.myapplication.ui.CompleteScreen
 import com.example.myapplication.ui.EmptyStateScreen
@@ -108,6 +113,10 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainAppNav() {
     val navigationStack = remember { mutableStateListOf(AppScreen.SPLASH) }
+    val context = LocalContext.current
+    val sessionManager = remember { SessionManager(context) }
+    val authRepository = remember { AuthRepository(sessionManager) }
+    val authViewModel = remember { AuthViewModel(authRepository) }
     val currentScreen = navigationStack.lastOrNull() ?: AppScreen.HOME
 
     fun navigateTo(screen: AppScreen) {
@@ -158,7 +167,11 @@ fun MainAppNav() {
                 SplashScreen(
                     onSplashFinished = {
                         navigationStack.clear()
-                        navigationStack.add(AppScreen.ONBOARDING)
+                        if (authRepository.isLoggedIn()) {
+                            navigationStack.add(AppScreen.HOME)
+                        } else {
+                            navigationStack.add(AppScreen.ONBOARDING)
+                        }
                     }
                 )
             }
@@ -171,6 +184,7 @@ fun MainAppNav() {
             }
             AppScreen.LOGIN -> {
                 LoginScreen(
+                    authViewModel = authViewModel,
                     onLoginSuccess = {
                         navigationStack.clear()
                         navigationStack.add(AppScreen.HOME)
@@ -185,6 +199,7 @@ fun MainAppNav() {
             }
             AppScreen.SIGN_UP -> {
                 SignUpScreen(
+                    authViewModel = authViewModel,
                     onSignUpSuccess = {
                         navigationStack.clear()
                         navigationStack.add(AppScreen.HOME)
@@ -196,7 +211,9 @@ fun MainAppNav() {
             }
             AppScreen.FORGOT_PASSWORD -> {
                 ForgotPasswordScreen(
-                    onSendCodeClick = {
+                    authViewModel = authViewModel,
+                    onSendCodeClick = { email ->
+                        authViewModel.setResetPasswordEmail(email)
                         navigateTo(AppScreen.OTP_VERIFICATION)
                     },
                     onBackToLoginClick = {
@@ -206,6 +223,8 @@ fun MainAppNav() {
             }
             AppScreen.OTP_VERIFICATION -> {
                 OtpVerificationScreen(
+                    authViewModel = authViewModel,
+                    email = authViewModel.resetEmail.collectAsState().value,
                     onVerifyClick = {
                         navigateTo(AppScreen.RESET_PASSWORD)
                     },
@@ -214,6 +233,8 @@ fun MainAppNav() {
             }
             AppScreen.RESET_PASSWORD -> {
                 ResetPasswordScreen(
+                    authViewModel = authViewModel,
+                    email = authViewModel.resetEmail.collectAsState().value,
                     onUpdatePasswordSuccess = {
                         navigationStack.clear()
                         navigationStack.add(AppScreen.LOGIN)
@@ -591,6 +612,7 @@ fun MainAppNav() {
             }
             AppScreen.LOGOUT -> {
                 LogoutScreen(
+                    authViewModel = authViewModel,
                     onConfirmLogoutClick = {
                         navigationStack.clear()
                         navigationStack.add(AppScreen.LOGIN)

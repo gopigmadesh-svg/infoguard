@@ -9,6 +9,7 @@ import com.example.myapplication.data.network.model.AnalyzeClaimRequest
 import com.example.myapplication.data.network.model.LoginRequest
 import com.example.myapplication.data.network.model.SignUpRequest
 import com.example.myapplication.data.network.model.UserDto
+import com.example.myapplication.data.network.repository.ProfileRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -147,6 +148,38 @@ object ApiConnectionTester {
                     stepName = "4. Claim Verification (analysis/analyze_claim.php)",
                     success = false,
                     message = "Claim analysis test failed: ${e.message}"
+                )
+            )
+        }
+
+        // 5. Test Profile Fetch & Update
+        try {
+            val profileResp = ProfileRepository().getProfile(createdUserId)
+            if (profileResp.isSuccess) {
+                val p = profileResp.getOrThrow()
+                steps.add(
+                    StepResult(
+                        stepName = "5. User Profile API (profile/get_profile.php)",
+                        success = true,
+                        message = "Retrieved profile for ${p.name}",
+                        details = "Email: ${p.email}, Topics: ${p.topicsCount}, Checks: ${p.checksCount}"
+                    )
+                )
+            } else {
+                steps.add(
+                    StepResult(
+                        stepName = "5. User Profile API (profile/get_profile.php)",
+                        success = false,
+                        message = profileResp.exceptionOrNull()?.message ?: "Failed to get profile"
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            steps.add(
+                StepResult(
+                    stepName = "5. User Profile API (profile/get_profile.php)",
+                    success = false,
+                    message = "Profile test failed: ${e.message}"
                 )
             )
         }

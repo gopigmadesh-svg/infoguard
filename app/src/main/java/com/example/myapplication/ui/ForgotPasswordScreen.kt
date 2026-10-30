@@ -19,7 +19,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import android.util.Patterns
+import android.widget.Toast
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalContext
+import com.example.myapplication.data.network.repository.AuthRepository
+import com.example.myapplication.data.network.repository.SessionManager
+import com.example.myapplication.ui.viewmodel.AuthViewModel
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.OutlinedTextField
@@ -45,10 +52,21 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun ForgotPasswordScreen(
-    onSendCodeClick: () -> Unit = {},
+    authViewModel: AuthViewModel? = null,
+    onSendCodeClick: (String) -> Unit = {},
     onBackToLoginClick: () -> Unit = {}
 ) {
-    var email by remember { mutableStateOf("alex@example.com") }
+    val context = LocalContext.current
+    val viewModel = authViewModel ?: remember {
+        val sessionManager = SessionManager(context)
+        AuthViewModel(AuthRepository(sessionManager))
+    }
+
+    val isLoading by viewModel.isLoading.collectAsState()
+    val serverError by viewModel.errorMessage.collectAsState()
+
+    var email by remember { mutableStateOf(viewModel.resetEmail.value.ifEmpty { "alex@example.com" }) }
+    var localError by remember { mutableStateOf<String?>(null) }
 
     Box(
         modifier = Modifier
@@ -225,7 +243,26 @@ fun ForgotPasswordScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Button(
-                        onClick = onSendCodeClick,
+                        onClick = {
+                            val trimmed = email.trim()
+                            if (trimmed.isEmpty() || !Patterns.EMAIL_ADDRESS.matcher(trimmed).matches()) {
+                                localError = "Please enter a valid email address."
+                                Toast.makeText(context, localError, Toast.LENGTH_SHORT).show()
+                            } else {
+                                localError = null
+                                viewModel.sendResetCode(
+                                    email = trimmed,
+                                    onSuccess = { msg ->
+                                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                        onSendCodeClick(trimmed)
+                                    },
+                                    onError = { err ->
+                                        Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
+                                    }
+                                )
+                            }
+                        },
+                        enabled = !isLoading,
                         colors = ButtonDefaults.buttonColors(containerColor = TealBright),
                         shape = RoundedCornerShape(18.dp),
                         modifier = Modifier
@@ -233,7 +270,7 @@ fun ForgotPasswordScreen(
                             .height(54.dp)
                     ) {
                         Text(
-                            text = "Send Verification Code",
+                            text = if (isLoading) "Sending Code..." else "Send Verification Code",
                             color = DarkNavyStart,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold

@@ -43,7 +43,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import com.example.myapplication.data.network.ProfilePictureUploader
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalInspectionMode
+import com.example.myapplication.data.network.repository.ProfileRepository
+import com.example.myapplication.data.network.repository.SessionManager
+import kotlinx.coroutines.launch
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -68,6 +74,18 @@ fun ProfileScreen(
     val context = LocalContext.current
     val isPreview = LocalInspectionMode.current
 
+    val coroutineScope = rememberCoroutineScope()
+    val sessionManager = remember { SessionManager(context) }
+    val profileRepo = remember { ProfileRepository() }
+
+    val currentUserId = remember(sessionManager.currentUserId) { if (sessionManager.currentUserId > 0) sessionManager.currentUserId else 1 }
+    var userName by remember(sessionManager.currentUserName) { mutableStateOf(sessionManager.currentUserName.ifEmpty { "Alex Morgan" }) }
+    var userEmail by remember(sessionManager.currentUserEmail) { mutableStateOf(sessionManager.currentUserEmail.ifEmpty { "alex.morgan@example.com" }) }
+    var userBio by remember { mutableStateOf("Senior Digital Media Researcher") }
+    var accountType by remember { mutableStateOf("Standard Account • Active") }
+    var checksCount by remember { mutableStateOf(12) }
+    var savedCount by remember { mutableStateOf(5) }
+
     val allInterests = listOf("SCIENCE", "TECHNOLOGY", "HEALTH", "CURRENT AFFAIRS")
     var selectedInterests by remember { mutableStateOf(setOf("SCIENCE", "TECHNOLOGY", "HEALTH")) }
     var selectedLanguage by remember { mutableStateOf("English (US)") }
@@ -76,10 +94,36 @@ fun ProfileScreen(
     // Persistent Profile Image Uri State
     var profileImageUri by remember {
         mutableStateOf<Uri?>(
-            File(context.filesDir, "truthlens_profile_avatar.jpg").let { file ->
-                if (file.exists()) Uri.fromFile(file) else null
+            ProfilePictureUploader.getSavedProfilePicture(context).let { savedUrl ->
+                if (!savedUrl.isNullOrBlank()) Uri.parse(savedUrl) else File(context.filesDir, "truthlens_profile_avatar.jpg").let { file ->
+                if (file.exists()) Uri.fromFile(file) else null }
             }
         )
+    }
+
+    LaunchedEffect(currentUserId) {
+        if (!isPreview) {
+            val result = profileRepo.getProfile(currentUserId)
+            result.onSuccess { profile ->
+                if (profile.name.isNotBlank()) userName = profile.name
+                if (profile.email.isNotBlank()) userEmail = profile.email
+                if (!profile.bio.isNullOrBlank()) userBio = profile.bio
+                accountType = profile.accountType
+                checksCount = profile.checksCount
+                savedCount = profile.savedCount
+                if (profile.interests.isNotEmpty()) {
+                    selectedInterests = profile.interests.toSet()
+                }
+                if (profile.language.isNotBlank()) {
+                    selectedLanguage = profile.language
+                }
+                val remoteAvatar = profile.avatarUrl ?: profile.profilePicture
+                if (!remoteAvatar.isNullOrBlank()) {
+                    profileImageUri = Uri.parse(remoteAvatar)
+                    ProfilePictureUploader.saveSavedProfilePicture(context, remoteAvatar)
+                }
+            }
+        }
     }
 
     // Gallery Photo Picker Launcher
@@ -98,7 +142,23 @@ fun ProfileScreen(
                             }
                         }
                         profileImageUri = Uri.fromFile(destFile)
-                        Toast.makeText(context, "Profile picture updated successfully!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Profile picture saved locally. Uploading to server...", Toast.LENGTH_SHORT).show()
+                        ProfilePictureUploader.uploadProfilePicture(
+                            context,
+                            sourceUri,
+                            currentUserId,
+                            userEmail,
+                            object : ProfilePictureUploader.UploadCallback {
+                                override fun onProgress(progressPercent: Int) {}
+                                override fun onSuccess(serverUrl: String) {
+                                    profileImageUri = Uri.parse(serverUrl)
+                                    Toast.makeText(context, "Uploaded to server successfully!", Toast.LENGTH_SHORT).show()
+                                }
+                                override fun onError(errorMessage: String) {
+                                    Toast.makeText(context, "Server upload error: $errorMessage", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        )
                     } catch (_: Exception) {
                         Toast.makeText(context, "Could not save profile picture.", Toast.LENGTH_SHORT).show()
                     }
@@ -220,7 +280,7 @@ fun ProfileScreen(
                                             )
                                     ) {
                                         Text(
-                                            text = "AM",
+                                            text = if (userName.trim().isNotEmpty()) userName.trim().split(" ").filter { it.isNotEmpty() }.let { if (it.size >= 2) "${it[0].take(1)}${it[1].take(1)}".uppercase() else it[0].take(2).uppercase() } else "AM",
                                             color = Color.White,
                                             fontSize = 28.sp,
                                             fontWeight = FontWeight.ExtraBold
@@ -247,7 +307,7 @@ fun ProfileScreen(
                         Spacer(modifier = Modifier.height(10.dp))
 
                         Text(
-                            text = "Alex Morgan",
+                            text = userName,
                             color = Color.White,
                             fontSize = 22.sp,
                             fontWeight = FontWeight.ExtraBold,
@@ -257,7 +317,7 @@ fun ProfileScreen(
                         Spacer(modifier = Modifier.height(2.dp))
 
                         Text(
-                            text = "alex.morgan@example.com",
+                            text = userEmail,
                             color = Color(0xFF94A3B8),
                             fontSize = 12.sp,
                             modifier = Modifier.clickable { onNavigateToPersonalInfo() }
@@ -273,7 +333,7 @@ fun ProfileScreen(
                             modifier = Modifier.clickable { onNavigateToPersonalInfo() }
                         ) {
                             Text(
-                                text = "🏷️ Standard Account • Active",
+                                text = "🏷️ $accountType",
                                 color = CyanAccent,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
@@ -291,14 +351,14 @@ fun ProfileScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         ProfileStatCard(
-                            number = "12",
+                            number = checksCount.toString(),
                             label = "Checks",
                             modifier = Modifier
                                 .weight(1f)
                                 .clickable { onNavigateToHistory() }
                         )
                         ProfileStatCard(
-                            number = "5",
+                            number = savedCount.toString(),
                             label = "Saved",
                             modifier = Modifier
                                 .weight(1f)
@@ -357,6 +417,14 @@ fun ProfileScreen(
                                             updated.add(interest)
                                         }
                                         selectedInterests = updated
+                                        if (!isPreview) {
+                                            coroutineScope.launch {
+                                                profileRepo.updateProfile(
+                                                    userId = currentUserId,
+                                                    interests = updated.toList()
+                                                )
+                                            }
+                                        }
                                     }
                                 ) {
                                     Row(
@@ -515,6 +583,14 @@ fun ProfileScreen(
             onLanguageSelected = { lang ->
                 selectedLanguage = lang
                 showLanguageDialog = false
+                if (!isPreview) {
+                    coroutineScope.launch {
+                        profileRepo.updateProfile(
+                            userId = currentUserId,
+                            language = lang
+                        )
+                    }
+                }
             },
             onDismiss = { showLanguageDialog = false }
         )

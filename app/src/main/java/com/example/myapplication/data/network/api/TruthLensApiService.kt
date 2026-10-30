@@ -7,12 +7,14 @@ import com.example.myapplication.data.network.model.ForgotPasswordRequest
 import com.example.myapplication.data.network.model.LoginRequest
 import com.example.myapplication.data.network.model.RecentScanDto
 import com.example.myapplication.data.network.model.RemoveArticleRequest
+import com.example.myapplication.data.network.model.ResetPasswordRequest
 import com.example.myapplication.data.network.model.SaveArticleRequest
 import com.example.myapplication.data.network.model.SavedArticleDto
 import com.example.myapplication.data.network.model.SignUpRequest
 import com.example.myapplication.data.network.model.UpdateProfileRequest
 import com.example.myapplication.data.network.model.UpdateSettingsRequest
 import com.example.myapplication.data.network.model.UserDto
+import com.example.myapplication.data.network.model.UserProfileDto
 import com.example.myapplication.data.network.model.UserSettingsDto
 import com.example.myapplication.data.network.model.VerifyOtpRequest
 import retrofit2.http.Body
@@ -48,18 +50,23 @@ interface TruthLensApiService {
         @Body request: VerifyOtpRequest
     ): ApiResponse<Unit>
 
+    @POST("auth/reset_password.php")
+    suspend fun resetPassword(
+        @Body request: ResetPasswordRequest
+    ): ApiResponse<Unit>
+
 
     // --- User Profile ---
 
     @GET("profile/get_profile.php")
     suspend fun getProfile(
         @Query("user_id") userId: Int
-    ): ApiResponse<UserDto>
+    ): ApiResponse<UserProfileDto>
 
     @POST("profile/update_profile.php")
     suspend fun updateProfile(
         @Body request: UpdateProfileRequest
-    ): ApiResponse<UserDto>
+    ): ApiResponse<UserProfileDto>
 
 
     // --- News / Claim Analysis ---

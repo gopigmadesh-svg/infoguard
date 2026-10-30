@@ -20,7 +20,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import android.widget.Toast
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import com.example.myapplication.data.network.repository.AuthRepository
+import com.example.myapplication.data.network.repository.SessionManager
+import com.example.myapplication.ui.viewmodel.AuthViewModel
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -41,11 +49,23 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun OtpVerificationScreen(
+    authViewModel: AuthViewModel? = null,
     email: String = "alex@example.com",
     onVerifyClick: () -> Unit = {},
     onResendClick: () -> Unit = {}
 ) {
-    val otpDigits = remember { mutableStateListOf("4", "8", "3", "1", "0", "9") }
+    val context = LocalContext.current
+    val viewModel = authViewModel ?: remember {
+        val sessionManager = SessionManager(context)
+        AuthViewModel(AuthRepository(sessionManager))
+    }
+
+    val isLoading by viewModel.isLoading.collectAsState()
+    val serverError by viewModel.errorMessage.collectAsState()
+
+    val targetEmail = email.ifEmpty { viewModel.resetEmail.value }.ifEmpty { "alex@example.com" }
+    val otpDigits = remember { mutableStateListOf("1", "2", "3", "4", "5", "6") }
+    var localError by remember { mutableStateOf<String?>(null) }
 
     Box(
         modifier = Modifier
@@ -238,7 +258,27 @@ fun OtpVerificationScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Button(
-                        onClick = onVerifyClick,
+                        onClick = {
+                            val fullOtp = otpDigits.joinToString("")
+                            if (fullOtp.length != 6) {
+                                localError = "Please enter all 6 digits of the verification code."
+                                Toast.makeText(context, localError, Toast.LENGTH_SHORT).show()
+                            } else {
+                                localError = null
+                                viewModel.verifyOtp(
+                                    email = targetEmail,
+                                    otp = fullOtp,
+                                    onSuccess = { msg ->
+                                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                        onVerifyClick()
+                                    },
+                                    onError = { err ->
+                                        Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
+                                    }
+                                )
+                            }
+                        },
+                        enabled = !isLoading,
                         colors = ButtonDefaults.buttonColors(containerColor = TealBright),
                         shape = RoundedCornerShape(18.dp),
                         modifier = Modifier
@@ -246,7 +286,7 @@ fun OtpVerificationScreen(
                             .height(54.dp)
                     ) {
                         Text(
-                            text = "Verify Code",
+                            text = if (isLoading) "Verifying..." else "Verify Code",
                             color = DarkNavyStart,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold

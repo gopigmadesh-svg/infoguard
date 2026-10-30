@@ -19,7 +19,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
+import android.widget.Toast
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalContext
+import com.example.myapplication.data.network.repository.AuthRepository
+import com.example.myapplication.data.network.repository.SessionManager
+import com.example.myapplication.ui.viewmodel.AuthViewModel
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.OutlinedTextField
@@ -46,10 +52,24 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun ResetPasswordScreen(
+    authViewModel: AuthViewModel? = null,
+    email: String = "",
     onUpdatePasswordSuccess: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val viewModel = authViewModel ?: remember {
+        val sessionManager = SessionManager(context)
+        AuthViewModel(AuthRepository(sessionManager))
+    }
+
+    val isLoading by viewModel.isLoading.collectAsState()
+    val serverError by viewModel.errorMessage.collectAsState()
+
+    val targetEmail = email.ifEmpty { viewModel.resetEmail.value }
+
     var newPassword by remember { mutableStateOf("NewSecurePass123!") }
     var confirmPassword by remember { mutableStateOf("NewSecurePass123!") }
+    var localError by remember { mutableStateOf<String?>(null) }
 
     val hasMinLength = newPassword.length >= 8
     val hasNumberAndSymbol = newPassword.any { it.isDigit() } && newPassword.any { !it.isLetterOrDigit() }
@@ -287,7 +307,30 @@ fun ResetPasswordScreen(
             // 3. Update Password Button
             item {
                 Button(
-                    onClick = onUpdatePasswordSuccess,
+                    onClick = {
+                        if (!hasMinLength) {
+                            localError = "Password must be at least 8 characters long."
+                            Toast.makeText(context, localError, Toast.LENGTH_SHORT).show()
+                        } else if (!passwordsMatch) {
+                            localError = "Passwords do not match."
+                            Toast.makeText(context, localError, Toast.LENGTH_SHORT).show()
+                        } else {
+                            localError = null
+                            viewModel.resetPassword(
+                                newPass = newPassword,
+                                confirmPass = confirmPassword,
+                                email = targetEmail,
+                                onSuccess = { msg ->
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                    onUpdatePasswordSuccess()
+                                },
+                                onError = { err ->
+                                    Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                        }
+                    },
+                    enabled = !isLoading,
                     colors = ButtonDefaults.buttonColors(containerColor = TealBright),
                     shape = RoundedCornerShape(18.dp),
                     modifier = Modifier
@@ -295,7 +338,7 @@ fun ResetPasswordScreen(
                         .height(54.dp)
                 ) {
                     Text(
-                        text = "Update Password",
+                        text = if (isLoading) "Updating Password..." else "Update Password",
                         color = DarkNavyStart,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold

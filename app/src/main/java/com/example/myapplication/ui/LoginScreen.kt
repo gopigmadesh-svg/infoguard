@@ -21,11 +21,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.collectAsState
+import com.example.myapplication.data.network.repository.AuthRepository
+import com.example.myapplication.data.network.repository.SessionManager
+import com.example.myapplication.ui.viewmodel.AuthViewModel
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,46 +52,68 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun LoginScreen(
+    authViewModel: AuthViewModel? = null,
     onLoginSuccess: () -> Unit = {},
     onNavigateToSignUp: () -> Unit = {},
     onForgotPasswordClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val viewModel = authViewModel ?: remember {
+        val sessionManager = SessionManager(context)
+        AuthViewModel(AuthRepository(sessionManager))
+    }
+
+    val isLoading by viewModel.isLoading.collectAsState()
+    val serverError by viewModel.errorMessage.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.clearError()
+    }
 
     var email by remember { mutableStateOf("alex@example.com") }
     var password by remember { mutableStateOf("password123") }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var localError by remember { mutableStateOf<String?>(null) }
 
     fun validateAndLogin() {
         val trimmedEmail = email.trim()
         val trimmedPass = password.trim()
 
         if (trimmedEmail.isEmpty()) {
-            errorMessage = "Please enter your email address."
-            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+            localError = "Please enter your email address."
+            Toast.makeText(context, localError, Toast.LENGTH_SHORT).show()
             return
         }
 
         if (!Patterns.EMAIL_ADDRESS.matcher(trimmedEmail).matches()) {
-            errorMessage = "Please enter a valid email address."
-            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+            localError = "Please enter a valid email address."
+            Toast.makeText(context, localError, Toast.LENGTH_SHORT).show()
             return
         }
 
         if (trimmedPass.isEmpty()) {
-            errorMessage = "Please enter your password."
-            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+            localError = "Please enter your password."
+            Toast.makeText(context, localError, Toast.LENGTH_SHORT).show()
             return
         }
 
         if (trimmedPass.length < 6) {
-            errorMessage = "Password must be at least 6 characters long."
-            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+            localError = "Password must be at least 6 characters long."
+            Toast.makeText(context, localError, Toast.LENGTH_SHORT).show()
             return
         }
 
-        errorMessage = null
-        onLoginSuccess()
+        localError = null
+        viewModel.login(
+            email = trimmedEmail,
+            pass = trimmedPass,
+            onSuccess = { user ->
+                Toast.makeText(context, "Welcome back, ${user.name ?: "User"}!", Toast.LENGTH_SHORT).show()
+                onLoginSuccess()
+            },
+            onError = { err ->
+                Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
+            }
+        )
     }
 
     Box(
@@ -225,7 +253,7 @@ fun LoginScreen(
                     value = email,
                     onValueChange = {
                         email = it
-                        errorMessage = null
+                        localError = null
                     },
                     singleLine = true,
                     leadingIcon = {
@@ -263,7 +291,7 @@ fun LoginScreen(
                     value = password,
                     onValueChange = {
                         password = it
-                        errorMessage = null
+                        localError = null
                     },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
@@ -287,10 +315,11 @@ fun LoginScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                if (errorMessage != null) {
+                val displayError = localError ?: serverError
+                if (displayError != null) {
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = errorMessage!!,
+                        text = displayError,
                         color = LowTrustRed,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
@@ -316,6 +345,7 @@ fun LoginScreen(
                 // Login CTA Button
                 Button(
                     onClick = { validateAndLogin() },
+                    enabled = !isLoading,
                     colors = ButtonDefaults.buttonColors(containerColor = TealBright),
                     shape = RoundedCornerShape(18.dp),
                     modifier = Modifier
@@ -323,7 +353,7 @@ fun LoginScreen(
                         .height(54.dp)
                 ) {
                     Text(
-                        text = "Login",
+                        text = if (isLoading) "Logging in..." else "Login",
                         color = DarkNavyStart,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold

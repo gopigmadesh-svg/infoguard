@@ -22,6 +22,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.runtime.collectAsState
+import com.example.myapplication.data.network.repository.AuthRepository
+import com.example.myapplication.data.network.repository.SessionManager
+import com.example.myapplication.ui.viewmodel.AuthViewModel
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -46,10 +50,18 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun SignUpScreen(
+    authViewModel: AuthViewModel? = null,
     onSignUpSuccess: () -> Unit = {},
     onNavigateToLogin: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val viewModel = authViewModel ?: remember {
+        val sessionManager = SessionManager(context)
+        AuthViewModel(AuthRepository(sessionManager))
+    }
+
+    val isLoading by viewModel.isLoading.collectAsState()
+    val serverError by viewModel.errorMessage.collectAsState()
 
     var fullName by remember { mutableStateOf("Alex Morgan") }
     var email by remember { mutableStateOf("alex@example.com") }
@@ -88,8 +100,8 @@ fun SignUpScreen(
             return
         }
 
-        if (trimmedPass.length < 6) {
-            errorMessage = "Password must be at least 6 characters long."
+        if (trimmedPass.length < 8) {
+            errorMessage = "Password must be at least 8 characters long."
             Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
             return
         }
@@ -107,7 +119,18 @@ fun SignUpScreen(
         }
 
         errorMessage = null
-        onSignUpSuccess()
+        viewModel.signUp(
+            name = trimmedName,
+            email = trimmedEmail,
+            pass = trimmedPass,
+            onSuccess = { user ->
+                Toast.makeText(context, "Account created successfully! Welcome ${user.name ?: ""}", Toast.LENGTH_SHORT).show()
+                onSignUpSuccess()
+            },
+            onError = { err ->
+                Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
+            }
+        )
     }
 
     Box(
@@ -216,7 +239,7 @@ fun SignUpScreen(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
-                        text = "Create Account",
+                        text = if (isLoading) "Creating Account..." else "Create Account",
                         color = Color.White,
                         fontSize = 32.sp,
                         fontWeight = FontWeight.ExtraBold,
@@ -451,10 +474,24 @@ fun SignUpScreen(
                 }
             }
 
+            val displayError = errorMessage ?: serverError
+            if (displayError != null) {
+                item {
+                    Text(
+                        text = displayError,
+                        color = LowTrustRed,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    )
+                }
+            }
+
             // 5. Create Account Button
             item {
                 Button(
                     onClick = { validateAndSignUp() },
+                    enabled = !isLoading,
                     colors = ButtonDefaults.buttonColors(containerColor = TealBright),
                     shape = RoundedCornerShape(18.dp),
                     modifier = Modifier
@@ -462,7 +499,7 @@ fun SignUpScreen(
                         .height(54.dp)
                 ) {
                     Text(
-                        text = "Create Account",
+                        text = if (isLoading) "Creating Account..." else "Create Account",
                         color = DarkNavyStart,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold

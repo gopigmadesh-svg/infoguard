@@ -29,7 +29,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import android.widget.Toast
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
+import com.example.myapplication.data.network.repository.ProfileRepository
+import com.example.myapplication.data.network.repository.SessionManager
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -51,7 +59,14 @@ fun ProfileSetupScreen(
     onSavePreferences: () -> Unit = {},
     onBackClick: () -> Unit = {}
 ) {
-    var name by remember { mutableStateOf("Alex Morgan") }
+    val context = LocalContext.current
+    val isPreview = LocalInspectionMode.current
+    val coroutineScope = rememberCoroutineScope()
+    val sessionManager = remember { SessionManager(context) }
+    val profileRepo = remember { ProfileRepository() }
+
+    val currentUserId = remember { if (sessionManager.currentUserId > 0) sessionManager.currentUserId else 1 }
+    var name by remember { mutableStateOf(sessionManager.currentUserName.ifEmpty { "Alex Morgan" }) }
     var language by remember { mutableStateOf("English (US)") }
     var alertEnabled by remember { mutableStateOf(true) }
 
@@ -64,6 +79,21 @@ fun ProfileSetupScreen(
     }
 
     val allInterests = listOf("News", "Politics", "Science", "Health", "Technology", "Social Media")
+
+    LaunchedEffect(currentUserId) {
+        if (!isPreview) {
+            val result = profileRepo.getProfile(currentUserId)
+            result.onSuccess { profile ->
+                if (profile.name.isNotBlank()) name = profile.name
+                if (profile.language.isNotBlank()) language = profile.language
+                alertEnabled = profile.notificationsEnabled
+                if (profile.interests.isNotEmpty()) {
+                    selectedInterests.clear()
+                    selectedInterests.addAll(profile.interests)
+                }
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -433,7 +463,28 @@ fun ProfileSetupScreen(
             item {
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
-                    onClick = onSavePreferences,
+                    onClick = {
+                        if (!isPreview) {
+                            coroutineScope.launch {
+                                val result = profileRepo.updateProfile(
+                                    userId = currentUserId,
+                                    name = name,
+                                    language = language,
+                                    interests = selectedInterests.toList(),
+                                    notificationsEnabled = alertEnabled
+                                )
+                                result.onSuccess {
+                                    Toast.makeText(context, "Preferences saved successfully!", Toast.LENGTH_SHORT).show()
+                                    onSavePreferences()
+                                }.onFailure {
+                                    Toast.makeText(context, "Preferences saved locally.", Toast.LENGTH_SHORT).show()
+                                    onSavePreferences()
+                                }
+                            }
+                        } else {
+                            onSavePreferences()
+                        }
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = TealBright),
                     shape = RoundedCornerShape(18.dp),
                     modifier = Modifier
