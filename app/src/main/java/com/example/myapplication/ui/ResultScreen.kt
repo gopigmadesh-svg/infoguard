@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -42,6 +43,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.myapplication.data.network.model.AnalysisResultDto
 
 val CoralWarningRed = Color(0xFFF87171)
 
@@ -52,6 +54,7 @@ enum class ResultType {
 
 @Composable
 fun ResultScreen(
+    analysisResult: AnalysisResultDto? = null,
     initialResultType: ResultType = ResultType.MOSTLY_TRUE,
     onBackClick: () -> Unit = {},
     onViewDetailsClick: () -> Unit = {},
@@ -59,8 +62,34 @@ fun ResultScreen(
 ) {
     var resultTypeState by remember { mutableIntStateOf(if (initialResultType == ResultType.MISLEADING) 0 else 1) }
 
-    val isMisleading = resultTypeState == 0
-    val themeColor = if (isMisleading) CoralWarningRed else HighTrustGreen
+    val effectiveScore = analysisResult?.trustScore ?: if (resultTypeState == 0) 24 else 74
+    val isMisleading = if (analysisResult != null) {
+        effectiveScore < 45 || analysisResult.verdict.contains("False", ignoreCase = true)
+    } else {
+        resultTypeState == 0
+    }
+    val isUnverified = !isMisleading && (
+        (analysisResult?.verdict?.contains("Unverified", ignoreCase = true) == true) ||
+        (analysisResult?.verdict?.contains("Further", ignoreCase = true) == true) ||
+        effectiveScore in 45..74
+    )
+
+    val themeColor = when {
+        isMisleading -> CoralWarningRed
+        isUnverified -> WarningYellow
+        else -> HighTrustGreen
+    }
+
+    val headlineText = analysisResult?.verdict ?: if (isMisleading) "False" else "Verified / True"
+    val statusTag = when {
+        isMisleading -> "FALSE / HIGH RISK"
+        isUnverified -> "NEEDS FURTHER VERIFICATION"
+        else -> "VERIFIED / TRUE"
+    }
+
+    val analyzedText = analysisResult?.title?.ifEmpty { null }
+        ?: analysisResult?.content?.ifEmpty { null }
+        ?: if (isMisleading) "\"Scientists Discover Miracle Cure for All Diseases\"" else "\"Taking vitamin D daily boosts immunity\""
 
     Box(
         modifier = Modifier
@@ -125,23 +154,19 @@ fun ResultScreen(
                         letterSpacing = (-0.5).sp
                     )
 
-                    // Toggle Button to switch between Misleading / Mostly True result views
+                    // Verdict Indicator Tag
                     Surface(
                         shape = RoundedCornerShape(14.dp),
                         color = Color(0x261E293B),
-                        border = BorderStroke(1.dp, Color(0x3300E5FF)),
-                        modifier = Modifier
-                            .height(42.dp)
-                            .clickable {
-                                resultTypeState = if (resultTypeState == 0) 1 else 0
-                            }
+                        border = BorderStroke(1.dp, themeColor.copy(alpha = 0.5f)),
+                        modifier = Modifier.height(42.dp)
                     ) {
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier.padding(horizontal = 10.dp)
                         ) {
                             Text(
-                                text = if (isMisleading) "⚠️ High Risk" else "✓ Verified",
+                                text = if (isMisleading) "⚠️ High Risk" else if (isUnverified) "ℹ️ Caution" else "✓ Verified",
                                 color = themeColor,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
@@ -176,6 +201,8 @@ fun ResultScreen(
                         ) {
                             if (isMisleading) {
                                 Text(text = "⚠️", fontSize = 28.sp)
+                            } else if (isUnverified) {
+                                Text(text = "🔍", fontSize = 26.sp)
                             } else {
                                 Canvas(modifier = Modifier.size(28.dp)) {
                                     drawShieldPath(color = themeColor, isStroke = true, strokeWidth = 3.5f)
@@ -193,7 +220,7 @@ fun ResultScreen(
                             border = BorderStroke(1.dp, themeColor.copy(alpha = 0.6f))
                         ) {
                             Text(
-                                text = if (isMisleading) "HIGH RISK DETECTED" else "VERIFIED ACCURATE",
+                                text = statusTag,
                                 color = themeColor,
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.ExtraBold,
@@ -206,7 +233,7 @@ fun ResultScreen(
 
                         // Verdict Headline
                         Text(
-                            text = if (isMisleading) "Potentially Misleading" else "Mostly True",
+                            text = headlineText,
                             color = Color.White,
                             fontSize = 26.sp,
                             fontWeight = FontWeight.ExtraBold,
@@ -225,13 +252,13 @@ fun ResultScreen(
                         ) {
                             Column {
                                 Text(
-                                    text = if (isMisleading) "88%" else "74%",
+                                    text = "$effectiveScore%",
                                     color = Color.White,
                                     fontSize = 24.sp,
                                     fontWeight = FontWeight.ExtraBold
                                 )
                                 Text(
-                                    text = "Match prediction confidence",
+                                    text = "Trust Score Assessment",
                                     color = Color(0xFF94A3B8),
                                     fontSize = 11.sp
                                 )
@@ -247,7 +274,7 @@ fun ResultScreen(
                                         color = Color(0x331E293B),
                                         style = Stroke(width = 5.dp.toPx())
                                     )
-                                    val sweep = if (isMisleading) 316f else 266f
+                                    val sweep = (effectiveScore / 100f) * 360f
                                     drawArc(
                                         color = themeColor,
                                         startAngle = -90f,
@@ -257,7 +284,7 @@ fun ResultScreen(
                                     )
                                 }
                                 Text(
-                                    text = if (isMisleading) "88%" else "74%",
+                                    text = "$effectiveScore%",
                                     color = themeColor,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold
@@ -285,10 +312,7 @@ fun ResultScreen(
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = if (isMisleading)
-                                        "\"Scientists Discover Miracle Cure for All Diseases\""
-                                    else
-                                        "\"Taking vitamin D daily boosts immunity\"",
+                                    text = "\"$analyzedText\"",
                                     color = Color.White,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
@@ -300,53 +324,64 @@ fun ResultScreen(
                 }
             }
 
-            // 3. Middle Section: Claim Assessment (for Mostly True) or Why It Was Flagged (for Misleading)
-            if (!isMisleading) {
-                // CLAIM ASSESSMENT Section
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "•• ",
-                                color = TealBright,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "CLAIM ASSESSMENT",
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.2.sp
-                            )
-                        }
+            // 3. Middle Section: Claim Assessment or Flagged Reasons
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "•• ",
+                            color = TealBright,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = if (isMisleading) "WHY IT WAS FLAGGED" else "CLAIM ASSESSMENT",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.2.sp
+                        )
+                    }
 
-                        Card(
-                            shape = RoundedCornerShape(18.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
-                            border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
-                            modifier = Modifier.fillMaxWidth()
+                    Card(
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                        border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Column(
-                                modifier = Modifier.padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                AssessmentRow(
-                                    tagLabel = "ACCURATE",
-                                    tagColor = HighTrustGreen,
-                                    description = "Vitamin D is linked to normal immune function."
-                                )
-                                AssessmentRow(
-                                    tagLabel = "NEEDS CONTEXT",
-                                    tagColor = BlueAccent,
-                                    description = "Does not single-handedly \"boost\" immunity."
-                                )
+                            if (!analysisResult?.reasons.isNullOrEmpty()) {
+                                analysisResult!!.reasons.forEach { reason ->
+                                    if (isMisleading) {
+                                        FlagItemRow(iconEmoji = "🚨", text = reason)
+                                    } else {
+                                        AssessmentRow(
+                                            tagLabel = if (isUnverified) "CONTEXT" else "ACCURATE",
+                                            tagColor = if (isUnverified) WarningYellow else HighTrustGreen,
+                                            description = reason
+                                        )
+                                    }
+                                }
+                            } else {
+                                if (isMisleading) {
+                                    FlagItemRow(iconEmoji = "🚨", text = "The claim uses exaggerated or unsupported assertions.")
+                                    FlagItemRow(iconEmoji = "📄", text = "No reliable supporting source was identified.")
+                                    FlagItemRow(iconEmoji = "⚠️", text = "Contradicts verified scientific or historical records.")
+                                } else {
+                                    AssessmentRow(tagLabel = "ACCURATE", tagColor = HighTrustGreen, description = "Statement aligns with verified published consensus.")
+                                    AssessmentRow(tagLabel = "CONTEXT", tagColor = BlueAccent, description = "Review primary source records for exact trial and observation details.")
+                                }
                             }
                         }
                     }
                 }
+            }
 
-                // SUPPORTING SOURCES Section
+            // 4. Supporting Sources Section
+            if (!analysisResult?.supportingSources.isNullOrEmpty()) {
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -375,162 +410,127 @@ fun ResultScreen(
                                 modifier = Modifier.padding(14.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Surface(
-                                            shape = RoundedCornerShape(10.dp),
-                                            color = HighTrustGreen.copy(alpha = 0.15f),
-                                            border = BorderStroke(1.dp, HighTrustGreen.copy(alpha = 0.4f)),
-                                            modifier = Modifier.size(36.dp)
+                                analysisResult!!.supportingSources.forEach { source ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.weight(1f)
                                         ) {
-                                            Box(contentAlignment = Alignment.Center) {
+                                            Surface(
+                                                shape = RoundedCornerShape(10.dp),
+                                                color = themeColor.copy(alpha = 0.15f),
+                                                border = BorderStroke(1.dp, themeColor.copy(alpha = 0.4f)),
+                                                modifier = Modifier.size(36.dp)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Text(
+                                                        text = source.name.take(3).uppercase(),
+                                                        color = themeColor,
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.ExtraBold
+                                                    )
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.width(10.dp))
+
+                                            Column {
                                                 Text(
-                                                    text = "NIH",
-                                                    color = HighTrustGreen,
-                                                    fontSize = 11.sp,
-                                                    fontWeight = FontWeight.ExtraBold
+                                                    text = source.name,
+                                                    color = Color.White,
+                                                    fontSize = 13.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Text(
+                                                    text = source.domain ?: "Verified Source",
+                                                    color = Color(0xFF64748B),
+                                                    fontSize = 10.sp
                                                 )
                                             }
                                         }
 
-                                        Spacer(modifier = Modifier.width(10.dp))
-
-                                        Column {
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = themeColor.copy(alpha = 0.15f),
+                                            border = BorderStroke(1.dp, themeColor.copy(alpha = 0.4f))
+                                        ) {
                                             Text(
-                                                text = "National Health Service",
-                                                color = Color.White,
-                                                fontSize = 13.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Text(
-                                                text = "Medical review • May 2023",
-                                                color = Color(0xFF64748B),
-                                                fontSize = 10.sp
+                                                text = "${source.matchPercentage}% Match",
+                                                color = themeColor,
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                             )
                                         }
                                     }
 
-                                    Surface(
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = HighTrustGreen.copy(alpha = 0.15f),
-                                        border = BorderStroke(1.dp, HighTrustGreen.copy(alpha = 0.4f))
-                                    ) {
-                                        Text(
-                                            text = "94% Match",
-                                            color = HighTrustGreen,
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                        )
+                                    if (!source.details.isNullOrBlank()) {
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = Color(0x1F1E293B),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text(
+                                                text = source.details,
+                                                color = Color(0xFF94A3B8),
+                                                fontSize = 11.sp,
+                                                lineHeight = 16.sp,
+                                                modifier = Modifier.padding(10.dp)
+                                            )
+                                        }
                                     }
                                 }
-
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = Color(0x1F1E293B),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(
-                                        text = "The evidence proves clear support, while no evidence shows key claims contradict health advice.",
-                                        color = Color(0xFF94A3B8),
-                                        fontSize = 11.sp,
-                                        lineHeight = 16.sp,
-                                        modifier = Modifier.padding(10.dp)
-                                    )
-                                }
                             }
-                        }
-                    }
-                }
-            } else {
-                // WHY IT WAS FLAGGED Section
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "•• ",
-                                color = TealBright,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "WHY IT WAS FLAGGED",
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.2.sp
-                            )
-                        }
-
-                        Card(
-                            shape = RoundedCornerShape(18.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
-                            border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                FlagItemRow(
-                                    iconEmoji = "🚨",
-                                    text = "The claim uses exaggerated language."
-                                )
-                                FlagItemRow(
-                                    iconEmoji = "📄",
-                                    text = "No reliable supporting source was identified in this excerpt."
-                                )
-                                FlagItemRow(
-                                    iconEmoji = "⚠️",
-                                    text = "The claim requires independent verification."
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // ANALYSIS SUMMARY Section
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "•• ",
-                                color = TealBright,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "ANALYSIS SUMMARY",
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.2.sp
-                            )
-                        }
-
-                        Card(
-                            shape = RoundedCornerShape(18.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
-                            border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = "Automated analysis identified patterns commonly associated with misleading claims. You should check the referenced trusted media sources.",
-                                color = Color(0xFF94A3B8),
-                                fontSize = 12.sp,
-                                lineHeight = 18.sp,
-                                modifier = Modifier.padding(16.dp)
-                            )
                         }
                     }
                 }
             }
 
-            // 4. Action Buttons Row: View Sources / Details & Share Result
+            // 5. Analysis Summary Section
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "•• ",
+                            color = TealBright,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "ANALYSIS SUMMARY",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.2.sp
+                        )
+                    }
+
+                    Card(
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                        border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = analysisResult?.summary?.ifEmpty { null }
+                                ?: if (isMisleading)
+                                    "Automated analysis identified patterns commonly associated with misleading claims. You should check the referenced trusted media sources."
+                                else
+                                    "The claim aligns with factual reporting standards and lacks typical misinformation patterns.",
+                            color = Color(0xFF94A3B8),
+                            fontSize = 12.sp,
+                            lineHeight = 18.sp,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
+                }
+            }
+
+            // 6. Action Buttons Row: View Details & Share Result
             item {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -545,7 +545,7 @@ fun ResultScreen(
                             .height(52.dp)
                     ) {
                         Text(
-                            text = if (isMisleading) "View Details" else "View Sources",
+                            text = "View Details",
                             color = DarkNavyStart,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold
@@ -578,7 +578,7 @@ fun ResultScreen(
                 }
             }
 
-            // 5. Footer Disclaimer Note
+            // 7. Footer Disclaimer Note
             item {
                 Text(
                     text = "A trusted source for your daily news report.",

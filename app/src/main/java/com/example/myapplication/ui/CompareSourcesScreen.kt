@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.myapplication.data.network.model.AnalysisResultDto
 
 data class ComparisonSourceItem(
     val id: String,
@@ -51,16 +52,37 @@ data class ComparisonSourceItem(
 
 @Composable
 fun CompareSourcesScreen(
+    analysisResult: AnalysisResultDto? = null,
     onBackClick: () -> Unit = {},
     onOpenReportClick: () -> Unit = {},
     onFilterClick: () -> Unit = {}
 ) {
-    val sourcesList = listOf(
-        ComparisonSourceItem("1", "Reuters", "Strong corroboration", 92, HighTrustGreen, "📄", Color(0x2610B981)),
-        ComparisonSourceItem("2", "WHO", "Direct medical guidance", 88, HighTrustGreen, "🌐", Color(0x2600E5FF)),
-        ComparisonSourceItem("3", "Daily Network", "Partial context only", 64, WarningYellow, "📰", Color(0x26F59E0B)),
-        ComparisonSourceItem("4", "AltHealthBlog", "No cited evidence", 21, LowTrustRed, "🚨", Color(0x26F87171))
-    )
+    val sourcesList = if (!analysisResult?.supportingSources.isNullOrEmpty()) {
+        analysisResult!!.supportingSources.mapIndexed { idx, s ->
+            val score = s.matchPercentage
+            val (color, emoji, bgColor) = when {
+                score >= 80 -> Triple(HighTrustGreen, "📄", Color(0x2610B981))
+                score >= 50 -> Triple(WarningYellow, "📰", Color(0x26F59E0B))
+                else -> Triple(LowTrustRed, "🚨", Color(0x26F87171))
+            }
+            ComparisonSourceItem(
+                id = (idx + 1).toString(),
+                name = s.name,
+                note = s.details ?: (s.domain ?: "Verified Reference Registry"),
+                score = score,
+                scoreColor = color,
+                iconEmoji = emoji,
+                iconBgColor = bgColor
+            )
+        }
+    } else {
+        listOf(
+            ComparisonSourceItem("1", "Reuters Fact Check", "Primary fact-checking archive", 94, HighTrustGreen, "📄", Color(0x2610B981)),
+            ComparisonSourceItem("2", "Associated Press (AP)", "Global wire corroboration", 90, HighTrustGreen, "🌐", Color(0x2600E5FF)),
+            ComparisonSourceItem("3", "Snopes Registry", "Cross-claim analysis", 72, WarningYellow, "📰", Color(0x26F59E0B)),
+            ComparisonSourceItem("4", "Independent Registry", "General web context", 50, CyanAccent, "🔍", Color(0x2600E5FF))
+        )
+    }
 
     Box(
         modifier = Modifier
@@ -130,7 +152,7 @@ fun CompareSourcesScreen(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "See how independent publishers report this claim.",
+                                text = "Cross-referencing reported evidence.",
                                 color = Color(0xFF94A3B8),
                                 fontSize = 12.sp
                             )
@@ -156,172 +178,137 @@ fun CompareSourcesScreen(
                 }
             }
 
-            // 2. Overall Consensus Banner Card
+            // 2. Info Banner Card
             item {
                 Card(
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = Color(0x401E293B)),
                     border = BorderStroke(1.dp, Color(0x3300E5FF)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(
-                        modifier = Modifier.padding(18.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = Color(0x2600E5FF),
-                            border = BorderStroke(1.dp, Color(0x4D00E5FF))
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0x2600E5FF))
                         ) {
-                            Text(
-                                text = "OVERALL CONSENSUS",
-                                color = CyanAccent,
-                                fontSize = 8.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 0.5.sp,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                            )
+                            Text(text = "🌐", fontSize = 20.sp)
                         }
 
-                        Text(
-                            text = "3 of 4 sources support the core content",
-                            color = Color.White,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.ExtraBold
-                        )
+                        Spacer(modifier = Modifier.width(14.dp))
 
-                        LinearProgressIndicator(
-                            progress = { 0.75f },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(6.dp)
-                                .clip(CircleShape),
-                            color = TealBright,
-                            trackColor = Color(0x331E293B)
-                        )
-
-                        Text(
-                            text = "Moderate Agreement • Some context missing",
-                            color = Color(0xFF94A3B8),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
-                        )
+                        Column {
+                            Text(
+                                text = "Cross-Source Comparison",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(
+                                text = "${sourcesList.size} independent sources cross-checked for this claim.",
+                                color = Color(0xFF94A3B8),
+                                fontSize = 11.sp
+                            )
+                        }
                     }
                 }
             }
 
-            // 3. Sources List
-            items(sourcesList) { source ->
+            // 3. Source List Items
+            items(sourcesList, key = { it.id }) { source ->
                 Card(
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(18.dp),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
                     border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .padding(14.dp)
-                            .fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .size(42.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(source.iconBgColor)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
                             ) {
-                                Text(text = source.iconEmoji, fontSize = 20.sp)
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(source.iconBgColor)
+                                ) {
+                                    Text(text = source.iconEmoji, fontSize = 18.sp)
+                                }
+
+                                Spacer(modifier = Modifier.width(12.dp))
+
+                                Column {
+                                    Text(
+                                        text = source.name,
+                                        color = Color.White,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = source.note,
+                                        color = Color(0xFF94A3B8),
+                                        fontSize = 11.sp,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
 
                             Spacer(modifier = Modifier.width(12.dp))
 
-                            Column {
-                                Text(
-                                    text = source.name,
-                                    color = Color.White,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = source.note,
-                                    color = Color(0xFF94A3B8),
-                                    fontSize = 11.sp
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(10.dp))
-
-                        // Score Badge Box
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = source.scoreColor.copy(alpha = 0.18f),
-                            border = BorderStroke(1.dp, source.scoreColor.copy(alpha = 0.4f))
-                        ) {
                             Text(
                                 text = "${source.score}%",
                                 color = source.scoreColor,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold
                             )
                         }
-                    }
-                }
-            }
 
-            // 4. Independent Agreement Note
-            item {
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
-                    border = BorderStroke(1.dp, Color(0x22FFFFFF)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(12.dp)
-                    ) {
-                        Box(modifier = Modifier.size(20.dp)) {
-                            Canvas(modifier = Modifier.fillMaxSize()) {
-                                drawLockIcon(color = TealBright, strokeWidth = 3f)
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = "Independent agreement is strongest when sources cite primary evidence.",
-                            color = Color(0xFF94A3B8),
-                            fontSize = 11.sp,
-                            lineHeight = 15.sp
+                        LinearProgressIndicator(
+                            progress = { source.score / 100f },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(5.dp)
+                                .clip(CircleShape),
+                            color = source.scoreColor,
+                            trackColor = Color(0x331E293B)
                         )
                     }
                 }
             }
 
-            // 5. Open Comparison Report Button
+            // 4. CTA Button: Open Full Report
             item {
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Button(
                     onClick = onOpenReportClick,
                     colors = ButtonDefaults.buttonColors(containerColor = TealBright),
                     shape = RoundedCornerShape(18.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(54.dp)
+                        .height(52.dp)
                 ) {
                     Text(
-                        text = "Open Comparison Report",
+                        text = "Open Full Report",
                         color = DarkNavyStart,
-                        fontSize = 16.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }

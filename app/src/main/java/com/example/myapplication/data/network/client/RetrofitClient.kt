@@ -32,6 +32,7 @@ object RetrofitClient {
         val request = original.newBuilder()
             .header("Accept", "application/json")
             .header("Content-Type", "application/json")
+            .header("X-Tunnel-Skip-Anti-Abuse", "true")
             .method(original.method, original.body)
             .build()
         chain.proceed(request)

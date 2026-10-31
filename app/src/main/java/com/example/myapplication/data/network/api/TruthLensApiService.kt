@@ -1,5 +1,7 @@
 package com.example.myapplication.data.network.api
 
+import com.example.myapplication.data.network.model.AiChatRequest
+import com.example.myapplication.data.network.model.AiChatResponseData
 import com.example.myapplication.data.network.model.AnalysisResultDto
 import com.example.myapplication.data.network.model.AnalyzeClaimRequest
 import com.example.myapplication.data.network.model.ApiResponse
@@ -112,5 +114,13 @@ interface TruthLensApiService {
     suspend fun updateSettings(
         @Body request: UpdateSettingsRequest
     ): ApiResponse<UserSettingsDto>
+
+
+    // --- AI Assistant Chat ---
+
+    @POST("ai_chat.php")
+    suspend fun sendAiChatMessage(
+        @Body request: AiChatRequest
+    ): ApiResponse<AiChatResponseData>
 }
 

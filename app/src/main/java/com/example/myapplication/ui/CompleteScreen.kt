@@ -36,12 +36,18 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.myapplication.data.network.model.AnalysisResultDto
 
 @Composable
 fun CompleteScreen(
+    analysisResult: AnalysisResultDto? = null,
     onViewResultClick: () -> Unit = {},
     onBackToHomeClick: () -> Unit = {}
 ) {
+    val displayTitle = analysisResult?.title?.ifEmpty { null } ?: "Submitted news article claim..."
+    val displayTag = analysisResult?.verdict?.uppercase() ?: "FACT-CHECK COMPLETE"
+    val displayDate = analysisResult?.formattedDate ?: "Completed just now"
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -242,7 +248,7 @@ fun CompleteScreen(
                                     border = BorderStroke(1.dp, Color(0x4D00E5FF))
                                 ) {
                                     Text(
-                                        text = "HIGH CONFIDENCE MATCH",
+                                        text = displayTag,
                                         color = CyanAccent,
                                         fontSize = 8.sp,
                                         fontWeight = FontWeight.ExtraBold,
@@ -254,14 +260,15 @@ fun CompleteScreen(
                                 Spacer(modifier = Modifier.height(4.dp))
 
                                 Text(
-                                    text = "Submitted news article claim...",
+                                    text = displayTitle,
                                     color = Color.White,
                                     fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 2
                                 )
 
                                 Text(
-                                    text = "Completed 1 min ago",
+                                    text = displayDate,
                                     color = Color(0xFF64748B),
                                     fontSize = 10.sp
                                 )

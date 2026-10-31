@@ -1,19 +1,101 @@
 package com.example.myapplication.data
 
+import android.content.Context
+import android.content.SharedPreferences
+import com.example.myapplication.data.network.client.DirectApiClient
 import com.example.myapplication.data.network.client.NetworkConfig
+import com.example.myapplication.data.network.client.RetrofitClient
+import com.example.myapplication.data.network.model.AiChatHistoryItem
+import com.example.myapplication.data.network.model.AiChatRequest
+import com.example.myapplication.data.network.model.AiChatResponseData
+import okhttp3.RequestBody.Companion.toRequestBody
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import java.io.OutputStreamWriter
-import java.net.HttpURLConnection
-import java.net.URL
 
+/**
+ * AI Providers supported by TruthLens
+ */
 enum class AiProvider {
     GEMINI,
     OPENAI
+}
+
+/**
+ * AI Models configurable in Ask AI Chat Screen
+ */
+enum class AiModelOption(
+    val id: String,
+    val displayName: String,
+    val provider: String,
+    val modelCode: String,
+    val badge: String,
+    val description: String
+) {
+    GEMINI_15_FLASH(
+        id = "gemini-1.5-flash",
+        displayName = "Gemini 1.5 Flash",
+        provider = "gemini",
+        modelCode = "gemini-1.5-flash",
+        badge = "Recommended",
+        description = "High-speed, fact-checking and misinformation verification"
+    ),
+    GEMINI_20_FLASH(
+        id = "gemini-2.0-flash",
+        displayName = "Gemini 2.0 Flash",
+        provider = "gemini",
+        modelCode = "gemini-2.0-flash",
+        badge = "Next-Gen",
+        description = "Advanced reasoning, cross-source synthesis & bias analysis"
+    ),
+    OPENAI_GPT4O_MINI(
+        id = "gpt-4o-mini",
+        displayName = "GPT-4o Mini",
+        provider = "openai",
+        modelCode = "gpt-4o-mini",
+        badge = "OpenAI",
+        description = "Lightweight OpenAI intelligence for digital claim verification"
+    );
+
+    companion object {
+        fun fromId(id: String): AiModelOption {
+            return entries.firstOrNull { it.id.equals(id, ignoreCase = true) } ?: GEMINI_15_FLASH
+        }
+    }
+}
+
+/**
+ * Fact-Checking Focus Modes
+ */
+enum class AiVerificationFocus(
+    val id: String,
+    val title: String,
+    val description: String,
+    val promptContext: String
+) {
+    FACT_CHECK(
+        id = "fact_check",
+        title = "Fact-Checking",
+        description = "Verify factual claims against authoritative databases",
+        promptContext = "[Focus: Verify factual accuracy and identify disinformation patterns]"
+    ),
+    SOURCE_BIAS(
+        id = "source_bias",
+        title = "Source & Bias",
+        description = "Analyze publisher bias, tone, and editorial integrity",
+        promptContext = "[Focus: Analyze source credibility, potential bias, and journalistic standards]"
+    ),
+    DEEP_EVIDENCE(
+        id = "deep_evidence",
+        title = "Deep Evidence",
+        description = "In-depth breakdown with primary source citations",
+        promptContext = "[Focus: Provide detailed historical context, primary documents, and counter-evidence]"
+    );
+
+    companion object {
+        fun fromId(id: String): AiVerificationFocus {
+            return entries.firstOrNull { it.id.equals(id, ignoreCase = true) } ?: FACT_CHECK
+        }
+    }
 }
 
 data class ChatHistoryMessage(
@@ -21,268 +103,168 @@ data class ChatHistoryMessage(
     val isUser: Boolean
 )
 
+/**
+ * Secure AI Chat Repository for TruthLens.
+ * 
+ * SECURITY ARCHITECTURE:
+ * - API keys are NEVER handled on the Android client.
+ * - All AI requests are securely proxied through the TruthLens PHP backend (ai_chat.php).
+ * - Backend server communicates with Gemini / OpenAI using server-side configuration.
+ */
 object AiChatRepository {
 
+    private const val PREFS_NAME = "truthlens_ai_config"
+    private const val KEY_SELECTED_MODEL = "selected_ai_model"
+    private const val KEY_SELECTED_FOCUS = "selected_ai_focus"
+
+    // User-configurable preferences
+    var selectedModel: AiModelOption = AiModelOption.GEMINI_15_FLASH
+    var selectedFocus: AiVerificationFocus = AiVerificationFocus.FACT_CHECK
+
+    // Backward-compatible properties
     var apiKey: String = ""
-    var selectedProvider: AiProvider = AiProvider.GEMINI
+    var selectedProvider: AiProvider
+        get() = if (selectedModel.provider == "openai") AiProvider.OPENAI else AiProvider.GEMINI
+        set(value) {
+            selectedModel = if (value == AiProvider.OPENAI) AiModelOption.OPENAI_GPT4O_MINI else AiModelOption.GEMINI_15_FLASH
+        }
     var customBackendUrl: String = ""
 
-    private const val SYSTEM_PROMPT =
-        "You are TruthLens AI Assistant, an expert AI specialized in detecting fake news, misinformation, verifying sources, evaluating claims, and explaining bias. Provide clear, objective, concise, and helpful advice to guide users in evaluating digital content."
+    fun loadPreferences(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val savedModelId = prefs.getString(KEY_SELECTED_MODEL, AiModelOption.GEMINI_15_FLASH.id) ?: AiModelOption.GEMINI_15_FLASH.id
+        val savedFocusId = prefs.getString(KEY_SELECTED_FOCUS, AiVerificationFocus.FACT_CHECK.id) ?: AiVerificationFocus.FACT_CHECK.id
+        selectedModel = AiModelOption.fromId(savedModelId)
+        selectedFocus = AiVerificationFocus.fromId(savedFocusId)
+    }
 
+    fun savePreferences(context: Context, model: AiModelOption, focus: AiVerificationFocus) {
+        selectedModel = model
+        selectedFocus = focus
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().apply {
+            putString(KEY_SELECTED_MODEL, model.id)
+            putString(KEY_SELECTED_FOCUS, focus.id)
+            apply()
+        }
+    }
+
+    /**
+     * Sends message to TruthLens secure backend AI service.
+     * Never returns a fake AI response when the server is unreachable;
+     * returns a clear, actionable connection error instead.
+     */
     suspend fun fetchAiResponse(
         history: List<ChatHistoryMessage>,
-        userMessage: String
+        userMessage: String,
+        userId: Int? = null
     ): String = withContext(Dispatchers.IO) {
-        if (userMessage.isBlank()) {
+        val trimmedMessage = userMessage.trim()
+        if (trimmedMessage.isBlank()) {
             return@withContext "Please type a message before sending."
         }
 
-        val trimmedKey = apiKey.trim()
-        val trimmedUrl = if (customBackendUrl.isNotBlank()) {
-            customBackendUrl.trim()
+        // Map recent history turns (last 8)
+        val historyItems = history.takeLast(8).map {
+            AiChatHistoryItem(
+                role = if (it.isUser) "user" else "model",
+                text = it.text
+            )
+        }
+
+        // Formulate prompt with verification focus context
+        val contextPrompt = if (selectedFocus != AiVerificationFocus.FACT_CHECK) {
+            "${selectedFocus.promptContext}\n\n$trimmedMessage"
         } else {
-            "${NetworkConfig.currentBaseUrl}ai_chat.php"
+            trimmedMessage
         }
 
-        // 1. Try Gemini API if key is provided
-        if (trimmedKey.isNotEmpty() && selectedProvider == AiProvider.GEMINI) {
-            try {
-                return@withContext callGeminiApi(trimmedKey, history, userMessage)
-            } catch (e: Exception) {
-                return@withContext "Gemini API Request Failed: ${e.localizedMessage ?: e.message}. Please verify your Gemini API key in Chat Config (⚙️)."
-            }
-        }
+        val request = AiChatRequest(
+            prompt = contextPrompt,
+            history = historyItems,
+            provider = selectedModel.provider,
+            model = selectedModel.modelCode,
+            userId = userId
+        )
 
-        // 2. Try OpenAI API if key is provided
-        if (trimmedKey.isNotEmpty() && selectedProvider == AiProvider.OPENAI) {
-            try {
-                return@withContext callOpenAiApi(trimmedKey, history, userMessage)
-            } catch (e: Exception) {
-                return@withContext "OpenAI API Request Failed: ${e.localizedMessage ?: e.message}. Please verify your OpenAI API key in Chat Config (⚙️)."
-            }
-        }
-
-        // 3. Try Backend AI Endpoint (http://127.0.0.1/Truthlense_backened/ai_chat.php)
+        // 1. Primary: Try Retrofit API Service
         try {
-            return@withContext callCustomBackend(trimmedUrl, history, userMessage)
-        } catch (e: Exception) {
-            // 4. Fallback Fact-Check Guidance if backend endpoint is unreachable
-            return@withContext generateFallbackFactCheckGuidance(userMessage)
-        }
-    }
-
-    private fun callGeminiApi(
-        key: String,
-        history: List<ChatHistoryMessage>,
-        userMessage: String
-    ): String {
-        val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$key"
-        val url = URL(endpoint)
-        val conn = url.openConnection() as HttpURLConnection
-        conn.requestMethod = "POST"
-        conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
-        conn.connectTimeout = 15000
-        conn.readTimeout = 15000
-        conn.doOutput = true
-
-        val rootJson = JSONObject()
-
-        // System Instruction
-        val sysInstruction = JSONObject()
-        val sysParts = JSONArray().put(JSONObject().put("text", SYSTEM_PROMPT))
-        sysInstruction.put("parts", sysParts)
-        rootJson.put("system_instruction", sysInstruction)
-
-        // Contents
-        val contentsArray = JSONArray()
-        for (msg in history.takeLast(10)) {
-            val contentObj = JSONObject()
-            contentObj.put("role", if (msg.isUser) "user" else "model")
-            val parts = JSONArray().put(JSONObject().put("text", msg.text))
-            contentObj.put("parts", parts)
-            contentsArray.put(contentObj)
-        }
-
-        // Current User Message
-        val currentObj = JSONObject()
-        currentObj.put("role", "user")
-        val currentParts = JSONArray().put(JSONObject().put("text", userMessage))
-        currentObj.put("parts", currentParts)
-        contentsArray.put(currentObj)
-
-        rootJson.put("contents", contentsArray)
-
-        val writer = OutputStreamWriter(conn.outputStream, "UTF-8")
-        writer.write(rootJson.toString())
-        writer.flush()
-        writer.close()
-
-        val responseCode = conn.responseCode
-        if (responseCode in 200..299) {
-            val reader = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8"))
-            val sb = StringBuilder()
-            var line: String?
-            while (reader.readLine().also { line = it } != null) {
-                sb.append(line)
+            val response = RetrofitClient.apiService.sendAiChatMessage(request)
+            if (response.success) {
+                val reply = response.data?.reply ?: response.message
+                if (reply.isNotBlank()) {
+                    return@withContext reply
+                }
             }
-            reader.close()
+        } catch (_: Exception) {
+            // Retrofit failed, try resilient DirectApiClient fallback
+        }
 
-            val resJson = JSONObject(sb.toString())
-            val candidates = resJson.optJSONArray("candidates")
-            if (candidates != null && candidates.length() > 0) {
-                val first = candidates.getJSONObject(0)
-                val content = first.optJSONObject("content")
-                if (content != null) {
-                    val parts = content.optJSONArray("parts")
-                    if (parts != null && parts.length() > 0) {
-                        return parts.getJSONObject(0).optString("text", "No text generated.")
+        // 2. Secondary: Try Direct OkHttp Client Fallback with ApiResponse<AiChatResponseData>
+        try {
+            val directResponse = DirectApiClient.postJson<AiChatResponseData>("ai_chat.php", request)
+            if (directResponse.success && directResponse.data != null) {
+                val directReply = directResponse.data.reply
+                if (directReply.isNotBlank()) {
+                    return@withContext directReply
+                }
+            }
+        } catch (_: Exception) {
+            // Primary URL failed
+        }
+
+        // 3. Fallback: If primary URL failed, try alternative endpoints if available
+        val currentBase = NetworkConfig.currentBaseUrl
+        val alternateBaseUrls = mutableListOf<String>()
+
+        if (!currentBase.contains("127.0.0.1")) {
+            alternateBaseUrls.add(NetworkConfig.DEFAULT_USB_BASE_URL)
+        }
+        if (!currentBase.contains("172.23.51.191")) {
+            alternateBaseUrls.add(NetworkConfig.DEFAULT_LAN_BASE_URL)
+        }
+        if (NetworkConfig.isEmulator && !currentBase.contains("10.0.2.2")) {
+            alternateBaseUrls.add(NetworkConfig.DEFAULT_EMULATOR_BASE_URL)
+        }
+
+        for (altBase in alternateBaseUrls) {
+            try {
+                val directType = object : com.google.gson.reflect.TypeToken<com.example.myapplication.data.network.model.ApiResponse<AiChatResponseData>>() {}.type
+                val url = if (altBase.endsWith("/")) "${altBase}ai_chat.php" else "$altBase/ai_chat.php"
+                val jsonPayload = RetrofitClient.gson.toJson(request)
+                val requestBody = jsonPayload.toRequestBody(DirectApiClient.JSON_MEDIA_TYPE)
+                val okReq = okhttp3.Request.Builder()
+                    .url(url)
+                    .post(requestBody)
+                    .header("Accept", "application/json")
+                    .header("Content-Type", "application/json")
+                    .header("X-Tunnel-Skip-Anti-Abuse", "true")
+                    .build()
+
+                RetrofitClient.okHttpClient.newCall(okReq).execute().use { resp ->
+                    val body = resp.body?.string().orEmpty()
+                    if (resp.isSuccessful && body.isNotBlank()) {
+                        val parsed = RetrofitClient.gson.fromJson<com.example.myapplication.data.network.model.ApiResponse<AiChatResponseData>>(body, directType)
+                        if (parsed.success && parsed.data != null && parsed.data.reply.isNotBlank()) {
+                            // Automatically update working base URL
+                            NetworkConfig.setCustomBaseUrl(altBase)
+                            return@withContext parsed.data.reply
+                        }
                     }
                 }
-            }
-            return "Empty response returned from Gemini API."
-        } else {
-            val errorStream = conn.errorStream
-            val errorText = if (errorStream != null) {
-                BufferedReader(InputStreamReader(errorStream, "UTF-8")).use { it.readText() }
-            } else "HTTP $responseCode"
-            throw Exception("Gemini Error (HTTP $responseCode): $errorText")
-        }
-    }
-
-    private fun callOpenAiApi(
-        key: String,
-        history: List<ChatHistoryMessage>,
-        userMessage: String
-    ): String {
-        val url = URL("https://api.openai.com/v1/chat/completions")
-        val conn = url.openConnection() as HttpURLConnection
-        conn.requestMethod = "POST"
-        conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
-        conn.setRequestProperty("Authorization", "Bearer $key")
-        conn.connectTimeout = 15000
-        conn.readTimeout = 15000
-        conn.doOutput = true
-
-        val rootJson = JSONObject()
-        rootJson.put("model", "gpt-4o-mini")
-
-        val messagesArray = JSONArray()
-
-        // System Prompt
-        messagesArray.put(JSONObject().put("role", "system").put("content", SYSTEM_PROMPT))
-
-        // History
-        for (msg in history.takeLast(10)) {
-            val msgObj = JSONObject()
-            msgObj.put("role", if (msg.isUser) "user" else "assistant")
-            msgObj.put("content", msg.text)
-            messagesArray.put(msgObj)
-        }
-
-        // Current User Message
-        messagesArray.put(JSONObject().put("role", "user").put("content", userMessage))
-        rootJson.put("messages", messagesArray)
-
-        val writer = OutputStreamWriter(conn.outputStream, "UTF-8")
-        writer.write(rootJson.toString())
-        writer.flush()
-        writer.close()
-
-        val responseCode = conn.responseCode
-        if (responseCode in 200..299) {
-            val reader = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8"))
-            val sb = StringBuilder()
-            var line: String?
-            while (reader.readLine().also { line = it } != null) {
-                sb.append(line)
-            }
-            reader.close()
-
-            val resJson = JSONObject(sb.toString())
-            val choices = resJson.optJSONArray("choices")
-            if (choices != null && choices.length() > 0) {
-                val messageObj = choices.getJSONObject(0).optJSONObject("message")
-                if (messageObj != null) {
-                    return messageObj.optString("content", "No response generated.")
-                }
-            }
-            return "Empty response returned from OpenAI API."
-        } else {
-            val errorStream = conn.errorStream
-            val errorText = if (errorStream != null) {
-                BufferedReader(InputStreamReader(errorStream, "UTF-8")).use { it.readText() }
-            } else "HTTP $responseCode"
-            throw Exception("OpenAI Error (HTTP $responseCode): $errorText")
-        }
-    }
-
-    private fun callCustomBackend(
-        backendUrl: String,
-        history: List<ChatHistoryMessage>,
-        userMessage: String
-    ): String {
-        val url = URL(backendUrl)
-        val conn = url.openConnection() as HttpURLConnection
-        conn.requestMethod = "POST"
-        conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
-        conn.connectTimeout = 15000
-        conn.readTimeout = 15000
-        conn.doOutput = true
-
-        val rootJson = JSONObject()
-        rootJson.put("prompt", userMessage)
-
-        val historyArray = JSONArray()
-        for (msg in history) {
-            val h = JSONObject()
-            h.put("role", if (msg.isUser) "user" else "assistant")
-            h.put("text", msg.text)
-            historyArray.put(h)
-        }
-        rootJson.put("history", historyArray)
-
-        val writer = OutputStreamWriter(conn.outputStream, "UTF-8")
-        writer.write(rootJson.toString())
-        writer.flush()
-        writer.close()
-
-        val responseCode = conn.responseCode
-        if (responseCode in 200..299) {
-            val reader = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8"))
-            val text = reader.readText()
-            reader.close()
-            return try {
-                val json = JSONObject(text)
-                json.optString("reply", json.optString("response", text))
             } catch (_: Exception) {
-                text
-            }
-        } else {
-            throw Exception("Custom Backend HTTP $responseCode Error")
-        }
-    }
-
-    private fun generateFallbackFactCheckGuidance(query: String): String {
-        val lower = query.lowercase()
-        val configNote = "\n\n💡 *AI Setup Note: To enable live model responses (Gemini / OpenAI), tap the ⚙️ Config icon at the top right of this chat.*"
-
-        return when {
-            lower.contains("health") || lower.contains("cure") || lower.contains("vitamin") || lower.contains("medical") || lower.contains("vaccine") -> {
-                "🏥 **Health Claim Verification Guide:**\n\n1. **Check Primary Clinical Repositories:** Verify claims against PubMed, NIH, CDC, or WHO databases rather than social posts.\n2. **Look for Randomized Controlled Trials (RCTs):** Individual anecdotes do not prove medical efficacy.\n3. **Watch for Sensational Buzzwords:** Terms like 'miracle cure' or 'secret remedy' are classic red flags.$configNote"
-            }
-            lower.contains("election") || lower.contains("politics") || lower.contains("vote") || lower.contains("government") -> {
-                "🏛️ **Political & Election Claim Guide:**\n\n1. **Check Official Electoral Bodies:** Cross-examine voting law changes directly with local election commissions.\n2. **Verify Video Timestamps:** Viral videos are frequently recycled from past years or different regions.\n3. **Consult Non-Partisan Aggregators:** Review FactCheck.org, PolitiFact, or Reuters Fact Check.$configNote"
-            }
-            lower.contains("image") || lower.contains("photo") || lower.contains("deepfake") || lower.contains("video") -> {
-                "🖼️ **Media & Deepfake Detection Guide:**\n\n1. **Inspect Lighting & Reflections:** AI generated images often show inconsistent shadows, mismatched ear shapes, or blurred hair outlines.\n2. **Run Reverse Image Search:** Search the image on Google Images or TinEye to find the earliest date it was posted online.\n3. **Examine Metadata:** Authentic news photos preserve EXIF camera metadata.$configNote"
-            }
-            lower.contains("how") || lower.contains("spot") || lower.contains("fake") || lower.contains("identify") -> {
-                "🔍 **5 Golden Rules for Fact-Checking:**\n\n1. **Examine the Domain URL:** Watch for spoofed domain names (e.g. .co or slight misspellings).\n2. **Check the Author Bio:** Legitimate journalism includes reporter disclosures and staff contacts.\n3. **Cross-Search 3 Independent Outlets:** If major news agencies aren't reporting it, treat it with caution.\n4. **Read Beyond the Headline:** Clickbait headlines often misrepresent the actual body text.\n5. **Pause Before Sharing:** Emotional triggers are designed to induce rapid sharing.$configNote"
-            }
-            else -> {
-                "✨ **TruthLens Fact-Check Guidance:**\n\nTo verify: \"$query\"\n\n1. **Identify the Core Claim:** Is it a factual statistic or an opinion?\n2. **Source Inspection:** Who is the original publisher, and do they cite primary documentation?\n3. **Cross-Check Verification:** Have independent outlets or fact-checkers confirmed this item?$configNote"
+                // Try next alternate URL
             }
         }
+
+        // 4. Server Unreachable: Display clear, actionable error (no fake AI response)
+        val serverTarget = NetworkConfig.currentBaseUrl
+        return@withContext "⚠️ **TruthLens AI Server Connection Error**\n\n" +
+                "Could not establish a connection to the TruthLens backend server at:\n`$serverTarget`\n\n" +
+                "**Troubleshooting Checklist:**\n" +
+                "1. **Apache Server:** Verify that Apache is started in your XAMPP Control Panel on port 80.\n" +
+                "2. **USB Debugging (Physical Device):** Run `ensure_adb_reverse.bat` on your PC so port 80 is forwarded to your phone (`adb reverse tcp:80 tcp:80`).\n" +
+                "3. **Wi-Fi LAN (Same Network):** Ensure your phone and PC are connected to the same Wi-Fi.\n" +
+                "4. Tap ⚙️ at the top right of this chat to verify the server address or select an AI model."
     }
 }

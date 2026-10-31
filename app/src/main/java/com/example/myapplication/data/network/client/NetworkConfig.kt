@@ -8,12 +8,15 @@ import android.os.Build
  * Automatically selects the appropriate backend URL:
  * - When running on official Android Emulator: uses "http://10.0.2.2/Truthlense_backened/"
  * - When running on a physical Android device via USB: uses "http://127.0.0.1/Truthlense_backened/" (paired with `adb reverse tcp:80 tcp:80`)
+ * - When running over local Wi-Fi LAN: uses "http://172.23.51.191/Truthlense_backened/"
  * - Can also be updated dynamically at runtime via `setCustomBaseUrl()`.
  */
 object NetworkConfig {
 
-    const val DEFAULT_USB_BASE_URL = "https://d14nzqz3-80.inc1.devtunnels.ms/Truthlense_backened/"
+    const val DEFAULT_USB_BASE_URL = "http://127.0.0.1/Truthlense_backened/"
     const val DEFAULT_EMULATOR_BASE_URL = "http://10.0.2.2/Truthlense_backened/"
+    const val DEFAULT_LAN_BASE_URL = "http://172.23.51.191/Truthlense_backened/"
+    const val DEV_TUNNELS_BASE_URL = "https://d14nzqz3-80.inc1.devtunnels.ms/Truthlense_backened/"
     const val LOCALHOST_BASE_URL = "http://127.0.0.1/Truthlense_backened/"
 
     val isEmulator: Boolean by lazy {
@@ -30,7 +33,7 @@ object NetworkConfig {
     @Volatile
     var currentBaseUrl: String = if (isEmulator) DEFAULT_EMULATOR_BASE_URL else DEFAULT_USB_BASE_URL
 
-    const val CONNECT_TIMEOUT_SECONDS = 30L
+    const val CONNECT_TIMEOUT_SECONDS = 15L
     const val READ_TIMEOUT_SECONDS = 30L
     const val WRITE_TIMEOUT_SECONDS = 30L
 

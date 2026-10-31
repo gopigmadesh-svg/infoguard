@@ -328,9 +328,9 @@ fun ScanScreen(
                             Button(
                                 onClick = {
                                     if (textClaim.isNotBlank()) {
-                                        onScanNewsClick(textClaim)
+                                        onScanNewsClick(textClaim.trim())
                                     } else {
-                                        onScanFinished()
+                                        Toast.makeText(context, "Please enter news text or a claim to verify.", Toast.LENGTH_SHORT).show()
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = TealBright),

@@ -10,18 +10,21 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
+import com.example.myapplication.data.network.model.AnalysisResultDto
+import com.example.myapplication.data.network.repository.AuthRepository
+import com.example.myapplication.data.network.repository.SessionManager
 import com.example.myapplication.ui.AnalysisScreen
 import com.example.myapplication.ui.CameraScanScreen
 import com.example.myapplication.ui.ChatScreen
-import androidx.compose.runtime.collectAsState
-import androidx.compose.ui.platform.LocalContext
-import com.example.myapplication.data.network.repository.AuthRepository
-import com.example.myapplication.data.network.repository.SessionManager
-import com.example.myapplication.ui.viewmodel.AuthViewModel
 import com.example.myapplication.ui.CompareSourcesScreen
 import com.example.myapplication.ui.CompleteScreen
 import com.example.myapplication.ui.EmptyStateScreen
@@ -56,6 +59,7 @@ import com.example.myapplication.ui.TrustScoreExplanationScreen
 import com.example.myapplication.ui.UrlAnalysisScreen
 import com.example.myapplication.ui.WhyResultScreen
 import com.example.myapplication.ui.theme.MyApplicationTheme
+import com.example.myapplication.ui.viewmodel.AuthViewModel
 
 enum class AppScreen {
     SPLASH,
@@ -69,6 +73,13 @@ enum class AppScreen {
     HOME,
     SCAN,
     TIPS,
+    HISTORY,
+    PROFILE,
+    SETTINGS,
+    SAVED_ARTICLES,
+    CHAT,
+    REMINDERS,
+    NOTIFICATIONS,
     CAMERA_SCAN,
     IMAGE_ANALYSIS,
     URL_ANALYSIS,
@@ -83,13 +94,6 @@ enum class AppScreen {
     RESULT,
     WHY_RESULT,
     REPORT,
-    HISTORY,
-    SAVED_ARTICLES,
-    CHAT,
-    REMINDERS,
-    NOTIFICATIONS,
-    PROFILE,
-    SETTINGS,
     SOURCE_CREDIBILITY,
     EMPTY_STATE,
     ERROR,
@@ -117,6 +121,10 @@ fun MainAppNav() {
     val sessionManager = remember { SessionManager(context) }
     val authRepository = remember { AuthRepository(sessionManager) }
     val authViewModel = remember { AuthViewModel(authRepository) }
+
+    var activeClaimText by remember { mutableStateOf("") }
+    var activeScanResult by remember { mutableStateOf<AnalysisResultDto?>(null) }
+
     val currentScreen = navigationStack.lastOrNull() ?: AppScreen.HOME
 
     fun navigateTo(screen: AppScreen) {
@@ -289,14 +297,16 @@ fun MainAppNav() {
                     onScanFinished = {
                         navigateTo(AppScreen.ANALYSIS)
                     },
-                    onScanNewsClick = { _ ->
+                    onScanNewsClick = { text ->
+                        activeClaimText = text
                         navigateTo(AppScreen.ANALYSIS)
                     },
                     onScanImageClick = { _, _ ->
                         navigateTo(AppScreen.IMAGE_ANALYSIS)
                     },
-                    onScanUrlClick = { _ ->
-                        navigateTo(AppScreen.URL_ANALYSIS)
+                    onScanUrlClick = { url ->
+                        activeClaimText = url
+                        navigateTo(AppScreen.ANALYSIS)
                     },
                     onTabSelected = { index ->
                         selectBottomTab(index)
@@ -350,6 +360,7 @@ fun MainAppNav() {
             }
             AppScreen.COMPARE_SOURCES -> {
                 CompareSourcesScreen(
+                    analysisResult = activeScanResult,
                     onBackClick = {
                         goBack()
                     },
@@ -407,6 +418,7 @@ fun MainAppNav() {
             }
             AppScreen.TRUST_SCORE_EXPLANATION -> {
                 TrustScoreExplanationScreen(
+                    analysisResult = activeScanResult,
                     onBackClick = {
                         goBack()
                     },
@@ -416,13 +428,21 @@ fun MainAppNav() {
                     onCompareSourcesClick = {
                         navigateTo(AppScreen.COMPARE_SOURCES)
                     },
-                    onShareClick = { }
+                    onShareClick = {
+                        navigateTo(AppScreen.REPORT)
+                    }
                 )
             }
             AppScreen.ANALYSIS -> {
                 AnalysisScreen(
+                    claimText = activeClaimText,
+                    userId = if (authRepository.getCurrentUserId() > 0) authRepository.getCurrentUserId() else null,
                     onBackClick = {
                         goBack()
+                    },
+                    onAnalysisSuccess = { result ->
+                        activeScanResult = result
+                        navigateTo(AppScreen.COMPLETE)
                     },
                     onAnalysisComplete = {
                         navigateTo(AppScreen.COMPLETE)
@@ -431,8 +451,9 @@ fun MainAppNav() {
             }
             AppScreen.COMPLETE -> {
                 CompleteScreen(
+                    analysisResult = activeScanResult,
                     onViewResultClick = {
-                        navigateTo(AppScreen.TRUST_SCORE_EXPLANATION)
+                        navigateTo(AppScreen.RESULT)
                     },
                     onBackToHomeClick = {
                         switchTab(AppScreen.HOME)
@@ -441,6 +462,7 @@ fun MainAppNav() {
             }
             AppScreen.RESULT -> {
                 ResultScreen(
+                    analysisResult = activeScanResult,
                     onBackClick = {
                         goBack()
                     },
@@ -454,6 +476,7 @@ fun MainAppNav() {
             }
             AppScreen.WHY_RESULT -> {
                 WhyResultScreen(
+                    analysisResult = activeScanResult,
                     onBackClick = {
                         goBack()
                     }
@@ -461,6 +484,7 @@ fun MainAppNav() {
             }
             AppScreen.REPORT -> {
                 ReportScreen(
+                    analysisResult = activeScanResult,
                     onBackClick = {
                         goBack()
                     },

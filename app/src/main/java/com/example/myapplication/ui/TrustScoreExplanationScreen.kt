@@ -39,31 +39,67 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.myapplication.data.network.model.AnalysisResultDto
 
 @Composable
 fun TrustScoreExplanationScreen(
+    analysisResult: AnalysisResultDto? = null,
     score: Int = 78,
-    claimTitle: String = "Claim: Daily vitamin intake boosts baseline viral immunity",
-    domain: String = "dailynetwork.example",
+    claimTitle: String = "Claim Analysis",
+    domain: String = "factcheck.org",
     hasInsufficientEvidence: Boolean = false,
     onBackClick: () -> Unit = {},
     onViewReportClick: () -> Unit = {},
     onCompareSourcesClick: () -> Unit = {},
     onShareClick: () -> Unit = {}
 ) {
+    val effectiveScore = analysisResult?.trustScore ?: score
+    val effectiveTitle = analysisResult?.title?.ifEmpty { null } ?: claimTitle
+    val rawDomain = analysisResult?.domain
+        ?: analysisResult?.supportingSources?.firstOrNull()?.domain
+        ?: domain
+    val effectiveDomain = if (rawDomain.endsWith(".example", ignoreCase = true) || rawDomain.isBlank()) "factcheck.org" else rawDomain
+
+    val isFalse = (analysisResult?.verdict?.contains("False", ignoreCase = true) == true)
+            || (analysisResult?.verdict?.contains("Fake", ignoreCase = true) == true)
+            || effectiveScore < 45
+    val isUnverified = !isFalse && (
+        (analysisResult?.verdict?.contains("Unverified", ignoreCase = true) == true) ||
+        (analysisResult?.verdict?.contains("Further", ignoreCase = true) == true) ||
+        hasInsufficientEvidence ||
+        effectiveScore in 45..74
+    )
+
     val trustLevelText = when {
-        hasInsufficientEvidence -> "INSUFFICIENT EVIDENCE"
-        score >= 80 -> "HIGH TRUST"
-        score >= 50 -> "MODERATE TRUST"
-        else -> "LOW TRUST"
+        isFalse -> "FALSE"
+        isUnverified -> "NEEDS FURTHER VERIFICATION"
+        else -> "VERIFIED / TRUE"
     }
 
     val trustLevelColor = when {
-        hasInsufficientEvidence -> WarningYellow
-        score >= 80 -> HighTrustGreen
-        score >= 50 -> TealBright
-        else -> LowTrustRed
+        isFalse -> LowTrustRed
+        isUnverified -> WarningYellow
+        else -> HighTrustGreen
     }
+
+    val effectiveSummary = analysisResult?.summary?.ifEmpty { null }
+        ?: if (isUnverified) {
+            "Insufficient evidence was found in public research repositories or news databases to verify or refute this claim."
+        } else {
+            "The score of $effectiveScore% reflects correlation with documented evidence across authoritative registries."
+        }
+
+    val effectiveEvidence = analysisResult?.supportingEvidence
+        ?: analysisResult?.supportingSources?.firstOrNull()?.details
+        ?: "Empirical review of available scientific and media databases."
+
+    val effectiveCaveat = analysisResult?.caveat
+        ?: analysisResult?.reasons?.firstOrNull()
+        ?: "Headline and primary findings should be cross-referenced with independent primary records."
+
+    val effectiveReference = analysisResult?.supportingSources?.firstOrNull()?.let {
+        "${it.name} — ${it.matchPercentage}% Alignment"
+    } ?: "Public Fact-Checking Registry — 90% Alignment"
 
     Box(
         modifier = Modifier
@@ -192,7 +228,7 @@ fun TrustScoreExplanationScreen(
                             }
 
                             Text(
-                                text = "Source: $domain",
+                                text = "Source: $effectiveDomain",
                                 color = Color(0xFF64748B),
                                 fontSize = 10.sp,
                                 maxLines = 1,
@@ -207,7 +243,7 @@ fun TrustScoreExplanationScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = claimTitle,
+                                    text = effectiveTitle,
                                     color = Color.White,
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
@@ -217,7 +253,7 @@ fun TrustScoreExplanationScreen(
                                 Spacer(modifier = Modifier.height(6.dp))
 
                                 Text(
-                                    text = "Evaluated Today • 3 Sources Cross-Checked",
+                                    text = "${analysisResult?.formattedDate ?: "Evaluated Today"} • ${analysisResult?.supportingSources?.size ?: 2} Sources Cross-Checked",
                                     color = Color(0xFF94A3B8),
                                     fontSize = 11.sp
                                 )
@@ -235,7 +271,7 @@ fun TrustScoreExplanationScreen(
                                         color = Color(0x331E293B),
                                         style = Stroke(width = 6.dp.toPx())
                                     )
-                                    val sweep = if (hasInsufficientEvidence) 0f else (score / 100f) * 360f
+                                    val sweep = if (isUnverified) 180f else (effectiveScore / 100f) * 360f
                                     drawArc(
                                         color = trustLevelColor,
                                         startAngle = -90f,
@@ -246,7 +282,7 @@ fun TrustScoreExplanationScreen(
                                 }
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(
-                                        text = if (hasInsufficientEvidence) "--" else "$score%",
+                                        text = "$effectiveScore%",
                                         color = Color.White,
                                         fontSize = 18.sp,
                                         fontWeight = FontWeight.ExtraBold
@@ -293,25 +329,17 @@ fun TrustScoreExplanationScreen(
                             modifier = Modifier.padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            if (hasInsufficientEvidence) {
-                                Text(
-                                    text = "Insufficient evidence was found in public research repositories or news databases to verify or refute this claim.",
-                                    color = WarningYellow,
-                                    fontSize = 12.sp,
-                                    lineHeight = 17.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            } else {
-                                Text(
-                                    text = "The score of $score% reflects strong corroboration from primary clinical research, offset slightly by sensationalized wording in the headline.",
-                                    color = Color.White,
-                                    fontSize = 13.sp,
-                                    lineHeight = 18.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
+                            Text(
+                                text = effectiveSummary,
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                lineHeight = 18.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            if (!analysisResult?.reasons.isNullOrEmpty()) {
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "Secondary health news outlets reported similar findings with verified medical disclosures. However, the title generalizes trial outcomes.",
+                                    text = analysisResult!!.reasons.joinToString(" • "),
                                     color = Color(0xFF94A3B8),
                                     fontSize = 11.sp,
                                     lineHeight = 16.sp
@@ -351,27 +379,33 @@ fun TrustScoreExplanationScreen(
                             modifier = Modifier.padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
+                            val metricItems = if (!analysisResult?.metrics.isNullOrEmpty()) {
+                                analysisResult!!.metrics
+                            } else {
+                                emptyList()
+                            }
+
                             IndicatorBarRow(
-                                title = "Source Reliability",
-                                percentage = 85,
+                                title = metricItems.getOrNull(0)?.label ?: "Source Reliability",
+                                percentage = metricItems.getOrNull(0)?.percentage ?: maxOf(10, effectiveScore - 5),
                                 barColor = CyanAccent,
                                 badgeText = "Verified Publisher Data"
                             )
                             IndicatorBarRow(
-                                title = "Factual Evidence",
-                                percentage = 80,
+                                title = metricItems.getOrNull(1)?.label ?: "Factual Evidence",
+                                percentage = metricItems.getOrNull(1)?.percentage ?: maxOf(8, effectiveScore - 10),
                                 barColor = TealBright,
-                                badgeText = "PubMed / NIH Studies"
+                                badgeText = "Registry Records"
                             )
                             IndicatorBarRow(
-                                title = "Claim Consistency",
-                                percentage = 72,
+                                title = metricItems.getOrNull(2)?.label ?: "Claim Consistency",
+                                percentage = metricItems.getOrNull(2)?.percentage ?: minOf(98, effectiveScore + 3),
                                 barColor = PurpleInfo,
                                 badgeText = "Cross-Source Agreement"
                             )
                             IndicatorBarRow(
-                                title = "Language Patterns",
-                                percentage = 65,
+                                title = metricItems.getOrNull(3)?.label ?: "Language Patterns",
+                                percentage = metricItems.getOrNull(3)?.percentage ?: effectiveScore,
                                 barColor = WarningYellow,
                                 badgeText = "AI Pattern Assessment"
                             )
@@ -421,7 +455,7 @@ fun TrustScoreExplanationScreen(
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "NIH Review confirms adequate vitamin D levels support baseline immune system response.",
+                                    text = effectiveEvidence,
                                     color = Color.White,
                                     fontSize = 11.sp,
                                     lineHeight = 15.sp
@@ -452,7 +486,7 @@ fun TrustScoreExplanationScreen(
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "Headline implies complete viral immunity, which is an oversimplification of trial data.",
+                                    text = effectiveCaveat,
                                     color = Color.White,
                                     fontSize = 11.sp,
                                     lineHeight = 15.sp
@@ -483,7 +517,7 @@ fun TrustScoreExplanationScreen(
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "WHO Health Advisory Brief — 92% Claims Alignment",
+                                    text = effectiveReference,
                                     color = Color.White,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold

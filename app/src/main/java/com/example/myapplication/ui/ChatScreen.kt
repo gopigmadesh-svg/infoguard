@@ -56,6 +56,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.myapplication.data.AiChatRepository
+import com.example.myapplication.data.AiModelOption
+import com.example.myapplication.data.AiVerificationFocus
+import com.example.myapplication.data.network.client.NetworkConfig
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalContext
 import com.example.myapplication.data.AiProvider
 import com.example.myapplication.data.ChatHistoryMessage
 import kotlinx.coroutines.launch
@@ -76,9 +82,14 @@ data class ChatMessage(
 fun ChatScreen(
     onBackClick: () -> Unit = {}
 ) {
+    val context = LocalContext.current
     var inputText by remember { mutableStateOf("") }
     var isTyping by remember { mutableStateOf(false) }
     var showConfigDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        AiChatRepository.loadPreferences(context)
+    }
 
     val coroutineScope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -211,7 +222,7 @@ fun ChatScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "Online • Fact-Check AI",
+                                        text = "Online • ${AiChatRepository.selectedModel.displayName}",
                                         color = Color(0xFF94A3B8),
                                         fontSize = 11.sp
                                     )
@@ -565,9 +576,9 @@ fun ChatMessageBubble(message: ChatMessage) {
 fun AiConfigDialog(
     onDismiss: () -> Unit
 ) {
-    var apiKeyText by remember { mutableStateOf(AiChatRepository.apiKey) }
-    var backendUrlText by remember { mutableStateOf(AiChatRepository.customBackendUrl) }
-    var provider by remember { mutableStateOf(AiChatRepository.selectedProvider) }
+    val context = LocalContext.current
+    var selectedModel by remember { mutableStateOf(AiChatRepository.selectedModel) }
+    var selectedFocus by remember { mutableStateOf(AiChatRepository.selectedFocus) }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -577,26 +588,110 @@ fun AiConfigDialog(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
-                modifier = Modifier.padding(20.dp),
+                modifier = Modifier
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
+                // Header
                 Text(
-                    text = "⚙️ AI Model Configuration",
+                    text = "\u2699\uFE0F AI Model Configuration",
                     color = Color.White,
-                    fontSize = 18.sp,
+                    fontSize = 17.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
 
                 Text(
-                    text = "Configure your AI Model key or backend server to enable live model inference.",
+                    text = "TruthLens fact-checking is powered by server-side AI reasoning. Choose your preferred AI model engine and verification focus below.",
                     color = Color(0xFF94A3B8),
                     fontSize = 12.sp,
                     lineHeight = 16.sp
                 )
 
-                // Select Provider Row
+                // Select AI Model
                 Text(
-                    text = "SELECT AI PROVIDER",
+                    text = "SELECT AI MODEL",
+                    color = Color(0xFF94A3B8),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AiModelOption.entries.forEach { option ->
+                        val isSelected = selectedModel == option
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isSelected) Color(0x3300E5FF) else Color(0x1F1E293B),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isSelected) CyanAccent else Color(0x33FFFFFF)
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedModel = option }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = option.displayName,
+                                            color = if (isSelected) CyanAccent else Color.White,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = if (isSelected) TealBright else Color(0x3394A3B8)
+                                        ) {
+                                            Text(
+                                                text = option.badge,
+                                                color = if (isSelected) DarkNavyStart else Color(0xFFCBD5E1),
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = option.description,
+                                        color = Color(0xFF94A3B8),
+                                        fontSize = 11.sp,
+                                        lineHeight = 14.sp
+                                    )
+                                }
+
+                                if (isSelected) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(18.dp)
+                                            .background(TealBright, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "âœ“",
+                                            color = DarkNavyStart,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Fact-Checking Verification Focus
+                Text(
+                    text = "VERIFICATION FOCUS",
                     color = Color(0xFF94A3B8),
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
@@ -604,107 +699,76 @@ fun AiConfigDialog(
                 )
 
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = if (provider == AiProvider.GEMINI) TealBright else Color(0x1F1E293B),
-                        border = BorderStroke(1.dp, if (provider == AiProvider.GEMINI) TealBright else Color(0x33FFFFFF)),
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { provider = AiProvider.GEMINI }
-                    ) {
-                        Text(
-                            text = "Google Gemini",
-                            color = if (provider == AiProvider.GEMINI) DarkNavyStart else Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(vertical = 10.dp)
-                        )
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = if (provider == AiProvider.OPENAI) TealBright else Color(0x1F1E293B),
-                        border = BorderStroke(1.dp, if (provider == AiProvider.OPENAI) TealBright else Color(0x33FFFFFF)),
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { provider = AiProvider.OPENAI }
-                    ) {
-                        Text(
-                            text = "OpenAI GPT",
-                            color = if (provider == AiProvider.OPENAI) DarkNavyStart else Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(vertical = 10.dp)
-                        )
+                    AiVerificationFocus.entries.forEach { focus ->
+                        val isFocusSelected = selectedFocus == focus
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isFocusSelected) TealBright else Color(0x1F1E293B),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isFocusSelected) TealBright else Color(0x33FFFFFF)
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { selectedFocus = focus }
+                        ) {
+                            Text(
+                                text = focus.title,
+                                color = if (isFocusSelected) DarkNavyStart else Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
                     }
                 }
 
-                // API Key Input
-                Column {
-                    Text(
-                        text = "API KEY",
-                        color = Color(0xFF94A3B8),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    OutlinedTextField(
-                        value = apiKeyText,
-                        onValueChange = { apiKeyText = it },
-                        placeholder = { Text("Paste API Key here...", color = Color(0xFF64748B), fontSize = 12.sp) },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = CyanAccent,
-                            unfocusedBorderColor = Color(0x33FFFFFF),
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                // Security & Server Status Card
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0x1A00E5FF),
+                    border = BorderStroke(1.dp, Color(0x3300E5FF)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = "\uD83D\uDEE1\uFE0F", fontSize = 14.sp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Zero Client-Side Key Exposure",
+                                color = CyanAccent,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "API keys are safely held on your PHP backend server (config/ai_config.php). Your Android client never exposes secret credentials.",
+                            color = Color(0xFF94A3B8),
+                            fontSize = 10.sp,
+                            lineHeight = 14.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Active Server: " + NetworkConfig.currentBaseUrl + "ai_chat.php",
+                            color = Color(0xFF64748B),
+                            fontSize = 9.sp
+                        )
+                    }
                 }
 
-                // Custom Backend Endpoint URL Input
-                Column {
-                    Text(
-                        text = "CUSTOM BACKEND URL (OPTIONAL)",
-                        color = Color(0xFF94A3B8),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    OutlinedTextField(
-                        value = backendUrlText,
-                        onValueChange = { backendUrlText = it },
-                        placeholder = { Text("https://api.yourdomain.com/chat", color = Color(0xFF64748B), fontSize = 12.sp) },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = CyanAccent,
-                            unfocusedBorderColor = Color(0x33FFFFFF),
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
+                // Action Buttons
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Button(
                         onClick = {
-                            AiChatRepository.apiKey = apiKeyText
-                            AiChatRepository.selectedProvider = provider
-                            AiChatRepository.customBackendUrl = backendUrlText
+                            AiChatRepository.savePreferences(context, selectedModel, selectedFocus)
                             onDismiss()
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = TealBright),
@@ -734,6 +798,7 @@ fun AiConfigDialog(
         }
     }
 }
+
 
 @Preview(showBackground = true)
 @Composable

@@ -26,6 +26,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LinearProgressIndicator
@@ -34,7 +36,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,15 +52,26 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.myapplication.data.network.model.AnalysisResultDto
+import com.example.myapplication.data.network.repository.AnalysisRepository
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 fun AnalysisScreen(
+    claimText: String = "",
+    userId: Int? = null,
     onBackClick: () -> Unit = {},
-    onAnalysisComplete: () -> Unit = {}
+    onAnalysisComplete: () -> Unit = {},
+    onAnalysisSuccess: (AnalysisResultDto) -> Unit = { _ -> },
+    onError: (String) -> Unit = {}
 ) {
     val isPreview = LocalInspectionMode.current
+    val analysisRepository = remember { AnalysisRepository() }
+
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var retryTrigger by remember { mutableStateOf(0) }
+    var receivedResult by remember { mutableStateOf<AnalysisResultDto?>(null) }
 
     // Progress counter animation from 0% to 68% to 100%
     val progressAnim = remember { Animatable(if (isPreview) 0.68f else 0f) }
@@ -74,23 +89,47 @@ fun AnalysisScreen(
     )
 
     if (!isPreview) {
-        LaunchedEffect(Unit) {
-            // Animate progress up to 68% first, then to 100%
+        // Run API request and animation in tandem
+        LaunchedEffect(retryTrigger) {
+            errorMessage = null
+            progressAnim.snapTo(0f)
+
+            // Start smooth initial progress
             progressAnim.animateTo(
-                targetValue = 0.68f,
-                animationSpec = tween(durationMillis = 2000, easing = FastOutSlowInEasing)
+                targetValue = 0.65f,
+                animationSpec = tween(durationMillis = 1800, easing = FastOutSlowInEasing)
             )
-            delay(1000.milliseconds)
-            progressAnim.animateTo(
-                targetValue = 1.00f,
-                animationSpec = tween(durationMillis = 1500, easing = LinearEasing)
-            )
-            delay(300.milliseconds)
-            onAnalysisComplete()
+
+            val textToAnalyze = claimText.ifBlank { "Unspecified News Claim" }
+            val repoResult = analysisRepository.analyzeClaim(userId, textToAnalyze)
+
+            if (repoResult.isSuccess) {
+                receivedResult = repoResult.getOrNull()
+                // Complete animation to 100%
+                progressAnim.animateTo(
+                    targetValue = 1.00f,
+                    animationSpec = tween(durationMillis = 1000, easing = LinearEasing)
+                )
+                delay(200.milliseconds)
+                receivedResult?.let {
+                    onAnalysisSuccess(it)
+                } ?: run {
+                    onAnalysisComplete()
+                }
+            } else {
+                val err = repoResult.exceptionOrNull()?.message ?: "Could not connect to TruthLens analysis server"
+                errorMessage = err
+                onError(err)
+            }
         }
     }
 
     val currentProgress = (progressAnim.value * 100).toInt()
+    val displayClaim = if (claimText.isNotBlank()) {
+        if (claimText.length > 55) claimText.take(52) + "..." else claimText
+    } else {
+        "Submitted news article claim..."
+    }
 
     Box(
         modifier = Modifier
@@ -158,7 +197,7 @@ fun AnalysisScreen(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "TruthLens AI is examining the submitted content.",
+                            text = "Deep claim verification & source cross-check.",
                             color = Color(0xFF94A3B8),
                             fontSize = 12.sp
                         )
@@ -166,76 +205,119 @@ fun AnalysisScreen(
                 }
             }
 
-            // 2. Central Hero Loading Animation & Percentage Display
+            // Error Notice Banner if failure occurs
+            if (errorMessage != null) {
+                item {
+                    Card(
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0x33F87171)),
+                        border = BorderStroke(1.dp, CoralWarningRed),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text(
+                                text = "⚠️ Verification Error",
+                                color = CoralWarningRed,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = errorMessage ?: "Unknown server error occurred",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Button(
+                                    onClick = { retryTrigger++ },
+                                    colors = ButtonDefaults.buttonColors(containerColor = TealBright),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text(text = "Retry", color = DarkNavyStart, fontWeight = FontWeight.Bold)
+                                }
+                                Button(
+                                    onClick = onBackClick,
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0x331E293B)),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text(text = "Go Back", color = Color.White)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Central Radar Animation Scanner
             item {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp)
                 ) {
-                    Spacer(modifier = Modifier.height(10.dp))
-
                     Box(
                         contentAlignment = Alignment.Center,
-                        modifier = Modifier.size(220.dp)
+                        modifier = Modifier.size(240.dp)
                     ) {
-                        // Concentric pulse rings
                         Canvas(modifier = Modifier.fillMaxSize()) {
-                            val centerOffset = Offset(size.width * 0.5f, size.height * 0.5f)
-                            val baseRadius = size.width * 0.36f
+                            val centerX = size.width / 2f
+                            val centerY = size.height / 2f
+
+                            // Outer diffuse ripple ring
                             drawCircle(
-                                color = CyanAccent.copy(alpha = 0.15f),
-                                center = centerOffset,
-                                radius = baseRadius * pulseScale,
+                                color = Color(0x1A00E5FF),
+                                radius = 110.dp.toPx() * pulseScale,
+                                center = Offset(centerX, centerY),
+                                style = Stroke(width = 1.dp.toPx())
+                            )
+
+                            // Middle glowing ring
+                            drawCircle(
+                                color = Color(0x3300E5FF),
+                                radius = 85.dp.toPx() * pulseScale,
+                                center = Offset(centerX, centerY),
                                 style = Stroke(width = 1.5.dp.toPx())
                             )
+
+                            // Innermost active glow disk
                             drawCircle(
-                                color = CyanAccent.copy(alpha = 0.08f),
-                                center = centerOffset,
-                                radius = (baseRadius * 1.35f) * pulseScale,
-                                style = Stroke(width = 1.dp.toPx())
+                                brush = Brush.radialGradient(
+                                    colors = listOf(Color(0x3300E5FF), Color.Transparent),
+                                    center = Offset(centerX, centerY),
+                                    radius = 65.dp.toPx()
+                                ),
+                                center = Offset(centerX, centerY),
+                                radius = 65.dp.toPx()
                             )
                         }
 
-                        // Central Hero Glass Icon Card
+                        // Central Badge Circle
                         Surface(
-                            shape = RoundedCornerShape(32.dp),
-                            color = Color(0x401E293B),
-                            border = BorderStroke(1.5.dp, GlassBorder),
-                            shadowElevation = 16.dp,
-                            modifier = Modifier.size(130.dp)
+                            shape = CircleShape,
+                            color = Color(0xFF0F172A),
+                            border = BorderStroke(2.dp, TealBright),
+                            modifier = Modifier.size(86.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(
-                                            Brush.radialGradient(
-                                                colors = listOf(Color(0x4000E5FF), Color(0x207C3AED))
-                                            )
-                                        )
-                                )
-
-                                Canvas(
-                                    modifier = Modifier
-                                        .size(64.dp)
-                                        .padding(4.dp)
-                                ) {
+                                Canvas(modifier = Modifier.size(38.dp)) {
                                     drawShieldPath(color = Color(0x3300E5FF), isStroke = false)
-                                    drawShieldPath(color = Color.White, isStroke = true, strokeWidth = 4f)
-                                    drawCheckmarkPath(color = CyanAccent, strokeWidth = 6f)
+                                    drawShieldPath(color = Color.White, isStroke = true, strokeWidth = 3f)
+                                    drawCheckmarkPath(color = CyanAccent, strokeWidth = 4f)
                                 }
                             }
                         }
 
-                        // Sparkle badge top right
+                        // Orbiting Sparkle Star Pill
                         Surface(
                             shape = CircleShape,
-                            color = Color(0xFF6D28D9),
-                            border = BorderStroke(1.dp, Color.White),
+                            color = Color(0xFF00E5FF),
                             modifier = Modifier
-                                .size(30.dp)
-                                .align(Alignment.TopEnd)
-                                .padding(top = 28.dp, end = 28.dp)
+                                .size(24.dp)
+                                .align(Alignment.TopCenter)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Text(text = "✨", fontSize = 12.sp)
@@ -291,10 +373,11 @@ fun AnalysisScreen(
 
                             Column {
                                 Text(
-                                    text = "Submitted news article claim...",
+                                    text = displayClaim,
                                     color = Color.White,
                                     fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
@@ -326,43 +409,32 @@ fun AnalysisScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     AnalysisStepRow(
                         title = "Text Pattern Analysis",
-                        subtitle = "Completed",
-                        isCompleted = true,
-                        isInProgress = false
+                        subtitle = if (currentProgress >= 30) "Completed" else "In Progress...",
+                        isCompleted = currentProgress >= 30,
+                        isInProgress = currentProgress < 30
                     )
                     AnalysisStepRow(
                         title = "Source Credibility Check",
-                        subtitle = "Completed",
-                        isCompleted = true,
-                        isInProgress = false
+                        subtitle = if (currentProgress >= 60) "Completed" else if (currentProgress >= 30) "In Progress..." else "Pending",
+                        isCompleted = currentProgress >= 60,
+                        isInProgress = currentProgress in 30..59
                     )
                     AnalysisStepRow(
                         title = "Claims and Evidence Review",
-                        subtitle = if (currentProgress >= 68) "Reviewing evidence..." else "Waiting...",
+                        subtitle = if (currentProgress >= 90) "Completed" else if (currentProgress >= 60) "In Progress..." else "Pending",
                         isCompleted = currentProgress >= 90,
                         isInProgress = currentProgress in 60..89
                     )
                     AnalysisStepRow(
-                        title = "Misinformation Risk Assessment",
-                        subtitle = if (currentProgress >= 90) "Calculating score..." else "Waiting...",
+                        title = "Cross-Source Aggregation",
+                        subtitle = if (currentProgress >= 100) "Completed" else if (currentProgress >= 90) "In Progress..." else "Pending",
                         isCompleted = currentProgress >= 100,
-                        isInProgress = currentProgress >= 90
+                        isInProgress = currentProgress in 90..99
                     )
                 }
             }
 
-            // 5. Disclaimer Footer Note
-            item {
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = "AI analysis may not be 100% accurate. Verify important claims independently.",
-                    color = Color(0xFF64748B),
-                    fontSize = 10.sp,
-                    lineHeight = 14.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
+            item { Spacer(modifier = Modifier.height(16.dp)) }
         }
     }
 }
@@ -374,60 +446,68 @@ fun AnalysisStepRow(
     isCompleted: Boolean,
     isInProgress: Boolean
 ) {
-    Surface(
+    Card(
         shape = RoundedCornerShape(16.dp),
-        color = if (isInProgress) Color(0x336D28D9) else Color(0xFF0F172A),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
         border = BorderStroke(
-            1.dp,
-            if (isInProgress) Color(0x66A78BFA) else if (isCompleted) Color(0x3310B981) else Color(0x1AFFFFFF)
+            width = 1.dp,
+            color = if (isInProgress) TealBright.copy(alpha = 0.5f) else Color(0x1AFFFFFF)
         ),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+            modifier = Modifier
+                .padding(14.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Step Status Icon Circle
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (isCompleted) HighTrustGreen.copy(alpha = 0.2f)
-                        else if (isInProgress) Color(0xFF6D28D9)
-                        else Color(0xFF1E293B)
-                    )
-            ) {
-                if (isCompleted) {
-                    Canvas(modifier = Modifier.size(12.dp)) {
-                        drawCheckmarkPath(color = HighTrustGreen, strokeWidth = 3f)
+            Surface(
+                shape = CircleShape,
+                color = when {
+                    isCompleted -> HighTrustGreen.copy(alpha = 0.2f)
+                    isInProgress -> TealBright.copy(alpha = 0.2f)
+                    else -> Color(0x1F1E293B)
+                },
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = when {
+                        isCompleted -> HighTrustGreen
+                        isInProgress -> TealBright
+                        else -> Color(0x33FFFFFF)
                     }
-                } else if (isInProgress) {
-                    Text(text = "⏳", fontSize = 11.sp)
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .background(Color(0xFF64748B), CircleShape)
-                    )
+                ),
+                modifier = Modifier.size(24.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    if (isCompleted) {
+                        Canvas(modifier = Modifier.size(10.dp)) {
+                            drawCheckmarkPath(color = HighTrustGreen, strokeWidth = 2.5f)
+                        }
+                    } else if (isInProgress) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(TealBright)
+                        )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(14.dp))
 
             Column {
                 Text(
                     text = title,
-                    color = if (isCompleted || isInProgress) Color.White else Color(0xFF94A3B8),
+                    color = Color.White,
                     fontSize = 13.sp,
-                    fontWeight = if (isCompleted || isInProgress) FontWeight.Bold else FontWeight.Medium
+                    fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = subtitle,
-                    color = if (isCompleted) HighTrustGreen else if (isInProgress) BlueAccent else Color(0xFF64748B),
-                    fontSize = 10.sp,
+                    color = if (isInProgress) TealBright else Color(0xFF64748B),
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Medium
                 )
             }

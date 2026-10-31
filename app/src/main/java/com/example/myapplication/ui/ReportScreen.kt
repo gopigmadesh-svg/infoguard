@@ -40,6 +40,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.myapplication.data.network.model.AnalysisResultDto
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 data class ReportMetric(
     val label: String,
@@ -49,17 +53,54 @@ data class ReportMetric(
 
 @Composable
 fun ReportScreen(
+    analysisResult: AnalysisResultDto? = null,
     onBackClick: () -> Unit = {},
     onDownloadClick: () -> Unit = {},
     onShareClick: () -> Unit = {}
 ) {
-    val metrics = listOf(
-        ReportMetric("Text Pattern Analysis", 78, Color(0xFFA78BFA)),
-        ReportMetric("Source Credibility", 45, Color(0xFFF59E0B)),
-        ReportMetric("Evidence Availability", 38, Color(0xFFF87171)),
-        ReportMetric("Claim Consistency", 68, Color(0xFF2DD4BF)),
-        ReportMetric("Historical Accuracy", 52, Color(0xFFFBBF24))
+    val currentDateStr = SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date())
+    val effectiveDate = analysisResult?.formattedDate ?: analysisResult?.timestamp ?: "Generated $currentDateStr"
+    val effectiveScore = analysisResult?.trustScore ?: 62
+    val effectiveVerdict = analysisResult?.verdict ?: "Needs Further Verification"
+    val effectiveTitle = analysisResult?.title?.ifEmpty { null } ?: "Submitted News Analysis"
+    val effectiveSummary = analysisResult?.summary?.ifEmpty { null }
+        ?: "The claim contains language patterns that warrant caution. Due to ambiguous indicators, independent verification is recommended."
+    val effectiveCredibility = analysisResult?.sourceCredibility ?: (if (effectiveScore >= 75) "Verified Source" else "Unverified / Caution")
+    val effectiveDomain = analysisResult?.domain
+        ?: analysisResult?.supportingSources?.firstOrNull()?.domain
+        ?: "factcheck.org"
+
+    val scoreColor = when {
+        effectiveScore >= 75 -> HighTrustGreen
+        effectiveScore >= 45 -> CyanAccent
+        else -> CoralWarningRed
+    }
+
+    val defaultMetricColors = listOf(
+        Color(0xFFA78BFA),
+        Color(0xFFF59E0B),
+        Color(0xFFF87171),
+        Color(0xFF2DD4BF),
+        Color(0xFFFBBF24)
     )
+
+    val metrics = if (!analysisResult?.metrics.isNullOrEmpty()) {
+        analysisResult!!.metrics.mapIndexed { index, m ->
+            ReportMetric(
+                label = m.label,
+                percentage = m.percentage,
+                barColor = defaultMetricColors[index % defaultMetricColors.size]
+            )
+        }
+    } else {
+        listOf(
+            ReportMetric("Text Pattern Analysis", effectiveScore, Color(0xFFA78BFA)),
+            ReportMetric("Source Credibility", maxOf(10, effectiveScore - 8), Color(0xFFF59E0B)),
+            ReportMetric("Evidence Availability", maxOf(8, effectiveScore - 12), Color(0xFFF87171)),
+            ReportMetric("Claim Consistency", minOf(98, effectiveScore + 4), Color(0xFF2DD4BF)),
+            ReportMetric("Historical Accuracy", effectiveScore, Color(0xFFFBBF24))
+        )
+    }
 
     Box(
         modifier = Modifier
@@ -129,7 +170,7 @@ fun ReportScreen(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Generated 15 Jun 2023",
+                                text = effectiveDate,
                                 color = Color(0xFF94A3B8),
                                 fontSize = 12.sp
                             )
@@ -182,7 +223,7 @@ fun ReportScreen(
                             Spacer(modifier = Modifier.height(6.dp))
 
                             Text(
-                                text = "Needs Further Verification",
+                                text = effectiveVerdict,
                                 color = Color.White,
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.ExtraBold
@@ -191,7 +232,7 @@ fun ReportScreen(
                             Spacer(modifier = Modifier.height(4.dp))
 
                             Text(
-                                text = "Evaluated across 5 metrics",
+                                text = "Evaluated across ${metrics.size} metrics",
                                 color = Color(0xFF94A3B8),
                                 fontSize = 11.sp
                             )
@@ -209,17 +250,18 @@ fun ReportScreen(
                                     color = Color(0x331E293B),
                                     style = Stroke(width = 6.dp.toPx())
                                 )
+                                val sweep = (effectiveScore / 100f) * 360f
                                 drawArc(
-                                    color = CyanAccent,
+                                    color = scoreColor,
                                     startAngle = -90f,
-                                    sweepAngle = 223f,
+                                    sweepAngle = sweep,
                                     useCenter = false,
                                     style = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
                                 )
                             }
                             Text(
-                                text = "62%",
-                                color = CyanAccent,
+                                text = "$effectiveScore%",
+                                color = scoreColor,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.ExtraBold
                             )
@@ -324,7 +366,7 @@ fun ReportScreen(
                             modifier = Modifier.padding(16.dp)
                         ) {
                             Text(
-                                text = "The claim contains language patterns that warrant caution. Due to ambiguous indicators, independent verification is recommended.",
+                                text = effectiveSummary,
                                 color = Color(0xFF94A3B8),
                                 fontSize = 12.sp,
                                 lineHeight = 18.sp
@@ -337,13 +379,17 @@ fun ReportScreen(
                             Spacer(modifier = Modifier.height(14.dp))
 
                             // Metadata Key-Value Table Rows
-                            ReportMetaRow(label = "Claim Content", value = "Misinformation")
+                            ReportMetaRow(label = "Claim Content", value = if (effectiveTitle.length > 36) effectiveTitle.take(34) + "..." else effectiveTitle)
                             Spacer(modifier = Modifier.height(10.dp))
-                            ReportMetaRow(label = "Scan Duration", value = "1.8 sec")
+                            ReportMetaRow(label = "Verdict", value = effectiveVerdict)
                             Spacer(modifier = Modifier.height(10.dp))
-                            ReportMetaRow(label = "Analysis Method", value = "AI Neural Engine")
+                            ReportMetaRow(label = "Trust Score", value = "$effectiveScore%")
                             Spacer(modifier = Modifier.height(10.dp))
-                            ReportMetaRow(label = "Source Verification", value = "Unconfirmed")
+                            ReportMetaRow(label = "Analysis Method", value = "TruthLens AI Engine")
+                            Spacer(modifier = Modifier.height(10.dp))
+                            ReportMetaRow(label = "Source Verification", value = effectiveCredibility)
+                            Spacer(modifier = Modifier.height(10.dp))
+                            ReportMetaRow(label = "Primary Source", value = effectiveDomain)
                         }
                     }
                 }

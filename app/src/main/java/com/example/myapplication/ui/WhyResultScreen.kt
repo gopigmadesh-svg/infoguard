@@ -35,11 +35,35 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.myapplication.data.network.model.AnalysisResultDto
 
 @Composable
 fun WhyResultScreen(
+    analysisResult: AnalysisResultDto? = null,
     onBackClick: () -> Unit = {}
 ) {
+    val effectiveScore = analysisResult?.trustScore ?: 24
+    val effectiveTitle = analysisResult?.title?.ifEmpty { null }
+        ?: analysisResult?.content?.ifEmpty { null }
+        ?: "\"Scientists Discover Miracle Cure for All Diseases\""
+    val isMisleading = effectiveScore < 45 || analysisResult?.verdict?.contains("False", ignoreCase = true) == true
+    val isUnverified = !isMisleading && (
+        (analysisResult?.verdict?.contains("Unverified", ignoreCase = true) == true) ||
+        (analysisResult?.verdict?.contains("Further", ignoreCase = true) == true) ||
+        effectiveScore in 45..74
+    )
+
+    val verdictColor = when {
+        isMisleading -> CoralWarningRed
+        isUnverified -> WarningYellow
+        else -> HighTrustGreen
+    }
+
+    val verdictText = analysisResult?.verdict?.uppercase() ?: if (isMisleading) "FALSE" else "VERIFIED / TRUE"
+
+    val summaryText = analysisResult?.summary?.ifEmpty { null }
+        ?: "The claim was evaluated against published records. Check the original publication and compare with independent, reliable sources."
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -119,7 +143,7 @@ fun WhyResultScreen(
                 Card(
                     shape = RoundedCornerShape(22.dp),
                     colors = CardDefaults.cardColors(containerColor = Color(0x401E293B)),
-                    border = BorderStroke(1.dp, Color(0x4DF87171)),
+                    border = BorderStroke(1.dp, verdictColor.copy(alpha = 0.5f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -132,12 +156,12 @@ fun WhyResultScreen(
                         ) {
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
-                                color = Color(0x33F87171),
-                                border = BorderStroke(1.dp, Color(0x66F87171))
+                                color = verdictColor.copy(alpha = 0.18f),
+                                border = BorderStroke(1.dp, verdictColor.copy(alpha = 0.4f))
                             ) {
                                 Text(
-                                    text = "POTENTIALLY MISLEADING",
-                                    color = CoralWarningRed,
+                                    text = verdictText,
+                                    color = verdictColor,
                                     fontSize = 8.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     letterSpacing = 1.sp,
@@ -146,7 +170,7 @@ fun WhyResultScreen(
                             }
 
                             Text(
-                                text = "88% prediction confidence",
+                                text = "$effectiveScore% trust score",
                                 color = Color(0xFF94A3B8),
                                 fontSize = 10.sp
                             )
@@ -155,7 +179,7 @@ fun WhyResultScreen(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         Text(
-                            text = "\"Scientists Discover Miracle Cure for All Diseases\"",
+                            text = "\"$effectiveTitle\"",
                             color = Color.White,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
@@ -174,12 +198,12 @@ fun WhyResultScreen(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth(0.88f)
+                                    .fillMaxWidth((effectiveScore / 100f).coerceIn(0.08f, 1f))
                                     .height(6.dp)
                                     .clip(CircleShape)
                                     .background(
                                         brush = Brush.horizontalGradient(
-                                            colors = listOf(WarningYellow, CoralWarningRed)
+                                            colors = if (isMisleading) listOf(WarningYellow, CoralWarningRed) else listOf(CyanAccent, HighTrustGreen)
                                         )
                                     )
                             )
@@ -191,27 +215,29 @@ fun WhyResultScreen(
             // 3. Breakdown Category Cards
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    val reasonsList = analysisResult?.reasons ?: emptyList()
+
                     BreakdownCategoryCard(
                         title = "Language Patterns",
-                        subtitle = "Sensational phrasing and absolute wording detected",
+                        subtitle = reasonsList.getOrNull(0) ?: "Sensational phrasing and absolute wording evaluated",
                         iconEmoji = "📄",
                         iconBgColor = Color(0x267C3AED)
                     )
                     BreakdownCategoryCard(
                         title = "Source Credibility",
-                        subtitle = "Frequently publishes unverified content",
+                        subtitle = analysisResult?.sourceCredibility ?: "Evaluated against verified publisher indices",
                         iconEmoji = "⚠️",
                         iconBgColor = Color(0x26F59E0B)
                     )
                     BreakdownCategoryCard(
                         title = "Supporting Evidence",
-                        subtitle = "No independent evidence found in the excerpt",
+                        subtitle = analysisResult?.supportingEvidence ?: "Independent cross-referencing completed",
                         iconEmoji = "🔍",
-                        iconBgColor = Color(0x26F87171)
+                        iconBgColor = if (isMisleading) Color(0x26F87171) else Color(0x2610B981)
                     )
                     BreakdownCategoryCard(
-                        title = "Missing Context",
-                        subtitle = "No survey, sample size, or peer-review data provided",
+                        title = "Context & Nuance",
+                        subtitle = analysisResult?.caveat ?: "Review original research for full methodology and sample size",
                         iconEmoji = "ℹ️",
                         iconBgColor = Color(0x2600E5FF)
                     )
@@ -233,7 +259,7 @@ fun WhyResultScreen(
                         Text(text = "✨", fontSize = 18.sp)
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = "The claim uses absolute wording and lacks sufficient supporting evidence in this excerpt. Check the original publication and compare the claim with independent, reliable sources.",
+                            text = summaryText,
                             color = Color.White,
                             fontSize = 12.sp,
                             lineHeight = 18.sp
@@ -271,9 +297,9 @@ fun WhyResultScreen(
                             modifier = Modifier.padding(14.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            VerifyCheckRow(text = "Find the original publication")
-                            VerifyCheckRow(text = "Check for current scientific studies")
-                            VerifyCheckRow(text = "Verify independent reporting")
+                            VerifyCheckRow(text = "Find the original publication or press release")
+                            VerifyCheckRow(text = "Check peer-reviewed studies or clinical trial databases")
+                            VerifyCheckRow(text = "Verify reporting across independent wire services (Reuters, AP)")
                         }
                     }
                 }
