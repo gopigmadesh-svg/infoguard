@@ -12,7 +12,7 @@ import android.os.Build
  */
 object NetworkConfig {
 
-    const val DEFAULT_USB_BASE_URL = "http://127.0.0.1/Truthlense_backened/"
+    const val DEFAULT_USB_BASE_URL = "https://d14nzqz3-80.inc1.devtunnels.ms/Truthlense_backened/"
     const val DEFAULT_EMULATOR_BASE_URL = "http://10.0.2.2/Truthlense_backened/"
     const val LOCALHOST_BASE_URL = "http://127.0.0.1/Truthlense_backened/"
 
