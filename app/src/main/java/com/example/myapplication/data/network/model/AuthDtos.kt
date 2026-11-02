@@ -73,6 +73,9 @@ data class UserDto(
     @SerializedName("account_type")
     val accountType: String? = null,
 
+    @SerializedName("token")
+    val token: String? = null,
+
     @SerializedName("checks_count")
     val checksCount: Int? = null,
 

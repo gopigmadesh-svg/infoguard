@@ -28,36 +28,57 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import com.example.myapplication.data.network.ProfilePictureUploader
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalInspectionMode
-import com.example.myapplication.data.network.repository.ProfileRepository
-import com.example.myapplication.data.network.repository.SessionManager
-import kotlinx.coroutines.launch
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import com.example.myapplication.data.OcrProcessor
+import com.example.myapplication.data.network.ProfilePictureUploader
+import com.example.myapplication.data.network.client.NetworkConfig
+import com.example.myapplication.data.network.repository.ProfileRepository
+import com.example.myapplication.data.network.repository.SessionManager
+import kotlinx.coroutines.launch
 import java.io.File
+
+/**
+ * Resolves relative avatar paths against the active backend server URL.
+ */
+fun resolveAvatarUrl(path: String?): String? {
+    if (path.isNullOrBlank()) return null
+    if (path.startsWith("http://") || path.startsWith("https://") ||
+        path.startsWith("content://") || path.startsWith("file://")) {
+        return path
+    }
+    val cleanBase = NetworkConfig.currentBaseUrl.trimEnd('/')
+    val cleanPath = path.trimStart('/')
+    val hostRoot = cleanBase.substringBefore("/Truthlense_backened")
+    return "$hostRoot/$cleanPath"
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -78,13 +99,26 @@ fun ProfileScreen(
     val sessionManager = remember { SessionManager(context) }
     val profileRepo = remember { ProfileRepository() }
 
-    val currentUserId = remember(sessionManager.currentUserId) { if (sessionManager.currentUserId > 0) sessionManager.currentUserId else 1 }
-    var userName by remember(sessionManager.currentUserName) { mutableStateOf(sessionManager.currentUserName.ifEmpty { "Alex Morgan" }) }
-    var userEmail by remember(sessionManager.currentUserEmail) { mutableStateOf(sessionManager.currentUserEmail.ifEmpty { "alex.morgan@example.com" }) }
-    var userBio by remember { mutableStateOf("Senior Digital Media Researcher") }
+    val currentUserId = remember(sessionManager.currentUserId) {
+        if (sessionManager.currentUserId > 0) sessionManager.currentUserId else 1
+    }
+
+    var userName by remember(sessionManager.currentUserName) {
+        mutableStateOf(sessionManager.currentUserName.ifEmpty { "TruthLens User" })
+    }
+    var userEmail by remember(sessionManager.currentUserEmail) {
+        mutableStateOf(sessionManager.currentUserEmail.ifEmpty { "" })
+    }
+    var userBio by remember(sessionManager.currentUserBio) {
+        mutableStateOf(sessionManager.currentUserBio)
+    }
     var accountType by remember { mutableStateOf("Standard Account • Active") }
-    var checksCount by remember { mutableStateOf(12) }
-    var savedCount by remember { mutableStateOf(5) }
+    var checksCount by remember { mutableStateOf(0) }
+    var savedCount by remember { mutableStateOf(0) }
+
+    var isLoading by remember { mutableStateOf(false) }
+    var isUploadingImage by remember { mutableStateOf(false) }
+    var showEditProfileDialog by remember { mutableStateOf(false) }
 
     val allInterests = listOf("SCIENCE", "TECHNOLOGY", "HEALTH", "CURRENT AFFAIRS")
     var selectedInterests by remember { mutableStateOf(setOf("SCIENCE", "TECHNOLOGY", "HEALTH")) }
@@ -92,22 +126,30 @@ fun ProfileScreen(
     var showLanguageDialog by remember { mutableStateOf(false) }
 
     // Persistent Profile Image Uri State
-    var profileImageUri by remember {
-        mutableStateOf<Uri?>(
-            ProfilePictureUploader.getSavedProfilePicture(context).let { savedUrl ->
-                if (!savedUrl.isNullOrBlank()) Uri.parse(savedUrl) else File(context.filesDir, "truthlens_profile_avatar.jpg").let { file ->
-                if (file.exists()) Uri.fromFile(file) else null }
-            }
-        )
+    val initialAvatarUri = remember {
+        val saved = sessionManager.currentUserAvatar.ifEmpty {
+            ProfilePictureUploader.getSavedProfilePicture(context)
+        }
+        if (!saved.isNullOrBlank()) {
+            val resolved = resolveAvatarUrl(saved)
+            Uri.parse(resolved ?: saved)
+        } else {
+            val localFile = File(context.filesDir, "truthlens_profile_avatar.jpg")
+            if (localFile.exists()) Uri.fromFile(localFile) else null
+        }
     }
+    var profileImageUri by remember { mutableStateOf<Uri?>(initialAvatarUri) }
 
+    // Load actual user profile from backend
     LaunchedEffect(currentUserId) {
-        if (!isPreview) {
+        if (!isPreview && currentUserId > 0) {
+            isLoading = true
             val result = profileRepo.getProfile(currentUserId)
+            isLoading = false
             result.onSuccess { profile ->
                 if (profile.name.isNotBlank()) userName = profile.name
                 if (profile.email.isNotBlank()) userEmail = profile.email
-                if (!profile.bio.isNullOrBlank()) userBio = profile.bio
+                userBio = profile.bio.orEmpty()
                 accountType = profile.accountType
                 checksCount = profile.checksCount
                 savedCount = profile.savedCount
@@ -119,9 +161,11 @@ fun ProfileScreen(
                 }
                 val remoteAvatar = profile.avatarUrl ?: profile.profilePicture
                 if (!remoteAvatar.isNullOrBlank()) {
-                    profileImageUri = Uri.parse(remoteAvatar)
-                    ProfilePictureUploader.saveSavedProfilePicture(context, remoteAvatar)
+                    val resolved = resolveAvatarUrl(remoteAvatar)
+                    profileImageUri = Uri.parse(resolved ?: remoteAvatar)
+                    ProfilePictureUploader.saveSavedProfilePicture(context, resolved ?: remoteAvatar)
                 }
+                sessionManager.saveUserProfile(profile)
             }
         }
     }
@@ -142,7 +186,9 @@ fun ProfileScreen(
                             }
                         }
                         profileImageUri = Uri.fromFile(destFile)
-                        Toast.makeText(context, "Profile picture saved locally. Uploading to server...", Toast.LENGTH_SHORT).show()
+                        isUploadingImage = true
+                        Toast.makeText(context, "Uploading profile picture to server...", Toast.LENGTH_SHORT).show()
+
                         ProfilePictureUploader.uploadProfilePicture(
                             context,
                             sourceUri,
@@ -151,16 +197,21 @@ fun ProfileScreen(
                             object : ProfilePictureUploader.UploadCallback {
                                 override fun onProgress(progressPercent: Int) {}
                                 override fun onSuccess(serverUrl: String) {
-                                    profileImageUri = Uri.parse(serverUrl)
-                                    Toast.makeText(context, "Uploaded to server successfully!", Toast.LENGTH_SHORT).show()
+                                    val resolvedUrl = resolveAvatarUrl(serverUrl) ?: serverUrl
+                                    profileImageUri = Uri.parse(resolvedUrl)
+                                    sessionManager.updateProfile(null, null, resolvedUrl)
+                                    isUploadingImage = false
+                                    Toast.makeText(context, "Profile picture uploaded successfully!", Toast.LENGTH_SHORT).show()
                                 }
                                 override fun onError(errorMessage: String) {
+                                    isUploadingImage = false
                                     Toast.makeText(context, "Server upload error: $errorMessage", Toast.LENGTH_LONG).show()
                                 }
                             }
                         )
-                    } catch (_: Exception) {
-                        Toast.makeText(context, "Could not save profile picture.", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        isUploadingImage = false
+                        Toast.makeText(context, "Could not process selected image: ${e.message}", Toast.LENGTH_SHORT).show()
                     }
                 } else {
                     Toast.makeText(context, validation.errorMessage, Toast.LENGTH_LONG).show()
@@ -258,15 +309,30 @@ fun ProfileScreen(
                                 border = BorderStroke(2.dp, CyanAccent),
                                 shadowElevation = 12.dp,
                                 modifier = Modifier
-                                    .size(86.dp)
+                                    .size(92.dp)
                                     .clickable { galleryLauncher?.launch("image/*") }
                             ) {
-                                if (profileImageUri != null) {
+                                if (isUploadingImage) {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(Color(0xFF0F172A))
+                                    ) {
+                                        CircularProgressIndicator(
+                                            color = TealBright,
+                                            strokeWidth = 3.dp,
+                                            modifier = Modifier.size(36.dp)
+                                        )
+                                    }
+                                } else if (profileImageUri != null) {
                                     AsyncImage(
                                         model = profileImageUri,
                                         contentDescription = "Profile Picture",
                                         contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize()
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clip(CircleShape)
                                     )
                                 } else {
                                     Box(
@@ -280,7 +346,11 @@ fun ProfileScreen(
                                             )
                                     ) {
                                         Text(
-                                            text = if (userName.trim().isNotEmpty()) userName.trim().split(" ").filter { it.isNotEmpty() }.let { if (it.size >= 2) "${it[0].take(1)}${it[1].take(1)}".uppercase() else it[0].take(2).uppercase() } else "AM",
+                                            text = if (userName.trim().isNotEmpty()) {
+                                                userName.trim().split(" ")
+                                                    .filter { it.isNotEmpty() }
+                                                    .let { if (it.size >= 2) "${it[0].take(1)}${it[1].take(1)}".uppercase() else it[0].take(2).uppercase() }
+                                            } else "TL",
                                             color = Color.White,
                                             fontSize = 28.sp,
                                             fontWeight = FontWeight.ExtraBold
@@ -295,33 +365,34 @@ fun ProfileScreen(
                                 color = TealBright,
                                 border = BorderStroke(1.5.dp, Color.White),
                                 modifier = Modifier
-                                    .size(26.dp)
+                                    .size(28.dp)
                                     .clickable { galleryLauncher?.launch("image/*") }
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Text(text = "📷", fontSize = 12.sp)
+                                    Text(text = "📷", fontSize = 13.sp)
                                 }
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
 
                         Text(
                             text = userName,
                             color = Color.White,
                             fontSize = 22.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            modifier = Modifier.clickable { onNavigateToPersonalInfo() }
+                            modifier = Modifier.clickable { showEditProfileDialog = true }
                         )
 
-                        Spacer(modifier = Modifier.height(2.dp))
-
-                        Text(
-                            text = userEmail,
-                            color = Color(0xFF94A3B8),
-                            fontSize = 12.sp,
-                            modifier = Modifier.clickable { onNavigateToPersonalInfo() }
-                        )
+                        if (userEmail.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = userEmail,
+                                color = Color(0xFF94A3B8),
+                                fontSize = 12.sp,
+                                modifier = Modifier.clickable { showEditProfileDialog = true }
+                            )
+                        }
 
                         Spacer(modifier = Modifier.height(6.dp))
 
@@ -329,8 +400,7 @@ fun ProfileScreen(
                         Surface(
                             shape = RoundedCornerShape(10.dp),
                             color = Color(0x2600E5FF),
-                            border = BorderStroke(1.dp, Color(0x4D00E5FF)),
-                            modifier = Modifier.clickable { onNavigateToPersonalInfo() }
+                            border = BorderStroke(1.dp, Color(0x4D00E5FF))
                         ) {
                             Text(
                                 text = "🏷️ $accountType",
@@ -340,6 +410,53 @@ fun ProfileScreen(
                                 letterSpacing = 0.5.sp,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                             )
+                        }
+
+                        // User Bio
+                        Spacer(modifier = Modifier.height(8.dp))
+                        if (userBio.isNotBlank()) {
+                            Text(
+                                text = userBio,
+                                color = Color(0xFFCBD5E1),
+                                fontSize = 13.sp,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 17.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth(0.9f)
+                                    .clickable { showEditProfileDialog = true }
+                            )
+                        } else {
+                            Text(
+                                text = "+ Add a bio description...",
+                                color = CyanAccent,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.clickable { showEditProfileDialog = true }
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Quick Edit Profile Button
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color(0x261E293B),
+                            border = BorderStroke(1.dp, Color(0x3300E5FF)),
+                            modifier = Modifier.clickable { showEditProfileDialog = true }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp)
+                            ) {
+                                Text(text = "✏️", fontSize = 12.sp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Edit Profile",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }
@@ -474,7 +591,7 @@ fun ProfileScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
-                                AccountOptionRow(iconEmoji = "👤", title = "Personal Information", onClick = onNavigateToPersonalInfo)
+                                AccountOptionRow(iconEmoji = "👤", title = "Personal Information & Preferences", onClick = onNavigateToPersonalInfo)
                                 HorizontalDivider(color = Color(0x1AFFFFFF))
                                 AccountOptionRow(iconEmoji = "🔖", title = "Saved Articles", onClick = onNavigateToSavedArticles)
                                 HorizontalDivider(color = Color(0x1AFFFFFF))
@@ -576,6 +693,36 @@ fun ProfileScreen(
         }
     }
 
+    // Edit Profile Modal Dialog
+    if (showEditProfileDialog) {
+        EditProfileDialog(
+            initialName = userName,
+            initialBio = userBio,
+            onDismiss = { showEditProfileDialog = false },
+            onSave = { newName, newBio ->
+                userName = newName
+                userBio = newBio
+                showEditProfileDialog = false
+                if (!isPreview) {
+                    coroutineScope.launch {
+                        val result = profileRepo.updateProfile(
+                            userId = currentUserId,
+                            name = newName,
+                            bio = newBio
+                        )
+                        result.onSuccess { updated ->
+                            sessionManager.saveUserProfile(updated)
+                            Toast.makeText(context, "Profile updated successfully!", Toast.LENGTH_SHORT).show()
+                        }.onFailure { err ->
+                            sessionManager.updateProfile(name = newName, bio = newBio)
+                            Toast.makeText(context, "Saved locally (${err.localizedMessage ?: "Offline"})", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            }
+        )
+    }
+
     // Language Selection Modal Dialog
     if (showLanguageDialog) {
         LanguageSelectionDialog(
@@ -598,12 +745,14 @@ fun ProfileScreen(
 }
 
 @Composable
-fun LanguageSelectionDialog(
-    currentLanguage: String,
-    onLanguageSelected: (String) -> Unit,
-    onDismiss: () -> Unit
+fun EditProfileDialog(
+    initialName: String,
+    initialBio: String,
+    onDismiss: () -> Unit,
+    onSave: (String, String) -> Unit
 ) {
-    val languages = listOf("English (US)", "Spanish (Español)", "French (Français)", "German (Deutsch)", "Chinese (中文)")
+    var editName by remember { mutableStateOf(initialName) }
+    var editBio by remember { mutableStateOf(initialBio) }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -613,63 +762,111 @@ fun LanguageSelectionDialog(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                modifier = Modifier
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Text(
-                    text = "🌐 Select Preferred Language",
+                    text = "✏️ Edit Profile",
                     color = Color.White,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
 
                 Text(
-                    text = "Choose your preferred language for article analysis and verification summaries.",
+                    text = "Update your public display name and bio.",
                     color = Color(0xFF94A3B8),
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp
+                    fontSize = 12.sp
                 )
 
-                Spacer(modifier = Modifier.height(4.dp))
-
-                languages.forEach { lang ->
-                    val isSelected = lang == currentLanguage
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (isSelected) Color(0x3300E5FF) else Color(0x1F1E293B),
-                        border = BorderStroke(1.dp, if (isSelected) TealBright else Color(0x33FFFFFF)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onLanguageSelected(lang) }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(14.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = lang,
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                            )
-
-                            if (isSelected) {
-                                Text(text = "✓", color = TealBright, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
+                // Name field
+                Column {
+                    Text(
+                        text = "FULL NAME",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    OutlinedTextField(
+                        value = editName,
+                        onValueChange = { editName = it },
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CyanAccent,
+                            unfocusedBorderColor = Color(0x33FFFFFF),
+                            focusedContainerColor = Color(0xFF1E293B),
+                            unfocusedContainerColor = Color(0xFF1E293B),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
+                // Bio field
+                Column {
+                    Text(
+                        text = "BIO / ABOUT",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    OutlinedTextField(
+                        value = editBio,
+                        onValueChange = { editBio = it },
+                        minLines = 2,
+                        maxLines = 4,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CyanAccent,
+                            unfocusedBorderColor = Color(0x33FFFFFF),
+                            focusedContainerColor = Color(0xFF1E293B),
+                            unfocusedContainerColor = Color(0xFF1E293B),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
 
-                Button(
-                    onClick = onDismiss,
-                    colors = ButtonDefaults.buttonColors(containerColor = TealBright),
-                    shape = RoundedCornerShape(12.dp),
+                // Actions
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Close", color = DarkNavyStart, fontWeight = FontWeight.Bold)
+                    Button(
+                        onClick = {
+                            if (editName.isNotBlank()) {
+                                onSave(editName.trim(), editBio.trim())
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = TealBright),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Save Changes", color = DarkNavyStart, fontWeight = FontWeight.Bold)
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0x261E293B),
+                        border = BorderStroke(1.dp, Color(0x33FFFFFF)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onDismiss() }
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.padding(vertical = 10.dp)
+                        ) {
+                            Text("Cancel", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
         }
@@ -677,22 +874,26 @@ fun LanguageSelectionDialog(
 }
 
 @Composable
-fun ProfileStatCard(number: String, label: String, modifier: Modifier = Modifier) {
-    Card(
+fun ProfileStatCard(
+    number: String,
+    label: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
-        border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
-        modifier = modifier
+        color = Color(0xFF0F172A),
+        border = BorderStroke(1.dp, Color(0x1A00E5FF)),
+        modifier = modifier.height(68.dp)
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(14.dp)
+            modifier = Modifier.fillMaxSize()
         ) {
             Text(
                 text = number,
-                color = Color.White,
-                fontSize = 18.sp,
+                color = CyanAccent,
+                fontSize = 20.sp,
                 fontWeight = FontWeight.ExtraBold
             )
             Spacer(modifier = Modifier.height(2.dp))
@@ -707,14 +908,18 @@ fun ProfileStatCard(number: String, label: String, modifier: Modifier = Modifier
 }
 
 @Composable
-fun AccountOptionRow(iconEmoji: String, title: String, onClick: () -> Unit) {
+fun AccountOptionRow(
+    iconEmoji: String,
+    title: String,
+    onClick: () -> Unit
+) {
     Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(vertical = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+            .padding(vertical = 12.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(text = iconEmoji, fontSize = 16.sp)
@@ -726,12 +931,75 @@ fun AccountOptionRow(iconEmoji: String, title: String, onClick: () -> Unit) {
                 fontWeight = FontWeight.Medium
             )
         }
-        Text(
-            text = "›",
-            color = Color(0xFF64748B),
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold
-        )
+        Text(text = "›", color = Color(0xFF64748B), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+fun LanguageSelectionDialog(
+    currentLanguage: String,
+    onLanguageSelected: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val languages = listOf("English (US)", "English (UK)", "Español", "Français", "Deutsch", "Hindi", "Tamil")
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+            border = BorderStroke(1.dp, CyanAccent),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "🌐 Select Language",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+
+                languages.forEach { lang ->
+                    val isSelected = lang == currentLanguage
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isSelected) Color(0x3300E5FF) else Color(0x1A1E293B),
+                        border = BorderStroke(1.dp, if (isSelected) CyanAccent else Color(0x22FFFFFF)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onLanguageSelected(lang) }
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(14.dp)
+                        ) {
+                            Text(
+                                text = lang,
+                                color = if (isSelected) CyanAccent else Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                            )
+                            if (isSelected) {
+                                Text(text = "✓", color = TealBright, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0x261E293B)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Close", color = Color.White)
+                }
+            }
+        }
     }
 }
 

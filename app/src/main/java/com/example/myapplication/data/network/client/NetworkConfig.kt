@@ -33,6 +33,9 @@ object NetworkConfig {
     @Volatile
     var currentBaseUrl: String = if (isEmulator) DEFAULT_EMULATOR_BASE_URL else DEFAULT_USB_BASE_URL
 
+    @Volatile
+    var currentAuthToken: String? = null
+
     const val CONNECT_TIMEOUT_SECONDS = 15L
     const val READ_TIMEOUT_SECONDS = 30L
     const val WRITE_TIMEOUT_SECONDS = 30L

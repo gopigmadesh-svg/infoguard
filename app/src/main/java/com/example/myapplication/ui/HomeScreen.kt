@@ -116,7 +116,8 @@ fun HomeScreen(
 
     val hasHistory = userScans.isNotEmpty()
     val calculatedScore = if (hasHistory) {
-        userScans.map { it.trustScore }.average().roundToInt()
+        val scores = userScans.mapNotNull { it.trustScore }
+        if (scores.isNotEmpty()) scores.average().roundToInt() else null
     } else null
 
     val (statusLabel, statusColor, explanationText) = when {
@@ -145,9 +146,10 @@ fun HomeScreen(
     val displayRecentScans = remember(userScans) {
         if (userScans.isNotEmpty()) {
             userScans.take(5).map { scan ->
+                val score = scan.trustScore ?: 0
                 val (color, emoji) = when {
-                    scan.trustScore >= 75 -> HighTrustGreen to "📄"
-                    scan.trustScore >= 50 -> WarningYellow to "📄"
+                    score >= 75 -> HighTrustGreen to "📄"
+                    score >= 50 -> WarningYellow to "📄"
                     else -> LowTrustRed to "🚨"
                 }
                 RecentScanItem(

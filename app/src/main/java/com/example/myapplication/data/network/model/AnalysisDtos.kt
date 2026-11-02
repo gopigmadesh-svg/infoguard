@@ -13,6 +13,20 @@ data class AnalyzeClaimRequest(
     val scanType: String = "news"
 )
 
+data class SubClaimDto(
+    @SerializedName("statement")
+    val statement: String = "",
+
+    @SerializedName("status")
+    val status: String = "VERIFIED", // VERIFIED, FALSE, MISLEADING, UNVERIFIED
+
+    @SerializedName("details")
+    val details: String? = null,
+
+    @SerializedName("evidence_sources")
+    val evidenceSources: List<String> = emptyList()
+)
+
 data class AnalysisSourceDto(
     @SerializedName("name")
     val name: String = "",
@@ -27,7 +41,13 @@ data class AnalysisSourceDto(
     val url: String? = null,
 
     @SerializedName("details")
-    val details: String? = null
+    val details: String? = null,
+
+    @SerializedName("published_date")
+    val publishedDate: String? = null,
+
+    @SerializedName("stance")
+    val stance: String? = "supports"
 )
 
 data class ReportMetricDto(
@@ -52,10 +72,19 @@ data class AnalysisResultDto(
     val content: String? = null,
 
     @SerializedName("trust_score")
-    val trustScore: Int = 50,
+    val trustScore: Int? = null,
+
+    @SerializedName("is_insufficient_evidence")
+    val isInsufficientEvidence: Boolean = false,
 
     @SerializedName("verdict")
     val verdict: String = "Needs Further Verification",
+
+    @SerializedName("risk_level")
+    val riskLevel: String? = null,
+
+    @SerializedName("risk_explanation")
+    val riskExplanation: String? = null,
 
     @SerializedName("summary")
     val summary: String = "",
@@ -63,14 +92,26 @@ data class AnalysisResultDto(
     @SerializedName("reasons")
     val reasons: List<String> = emptyList(),
 
+    @SerializedName("sub_claims")
+    val subClaims: List<SubClaimDto> = emptyList(),
+
     @SerializedName("supporting_sources")
     val supportingSources: List<AnalysisSourceDto> = emptyList(),
+
+    @SerializedName("contradicting_sources")
+    val contradictingSources: List<AnalysisSourceDto> = emptyList(),
 
     @SerializedName("metrics")
     val metrics: List<ReportMetricDto> = emptyList(),
 
     @SerializedName("supporting_evidence")
     val supportingEvidence: String? = null,
+
+    @SerializedName("contradicting_evidence")
+    val contradictingEvidence: String? = null,
+
+    @SerializedName("verification_limitations")
+    val verificationLimitations: String? = null,
 
     @SerializedName("caveat")
     val caveat: String? = null,
@@ -88,7 +129,10 @@ data class AnalysisResultDto(
     val timestamp: String? = null,
 
     @SerializedName("formatted_date")
-    val formattedDate: String? = null
+    val formattedDate: String? = null,
+
+    @SerializedName("search_time")
+    val searchTime: String? = null
 )
 
 data class RecentScanDto(
@@ -102,7 +146,10 @@ data class RecentScanDto(
     val scanType: String,
 
     @SerializedName("trust_score")
-    val trustScore: Int,
+    val trustScore: Int? = null,
+
+    @SerializedName("is_insufficient_evidence")
+    val isInsufficientEvidence: Boolean = false,
 
     @SerializedName("verdict")
     val verdict: String,

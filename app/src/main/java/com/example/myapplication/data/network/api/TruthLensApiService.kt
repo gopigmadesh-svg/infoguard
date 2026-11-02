@@ -81,7 +81,8 @@ interface TruthLensApiService {
     @GET("analysis/get_recent_scans.php")
     suspend fun getRecentScans(
         @Query("user_id") userId: Int,
-        @Query("limit") limit: Int = 10
+        @Query("limit") limit: Int = 10,
+        @Query("token") token: String? = null
     ): ApiResponse<List<RecentScanDto>>
 
 

@@ -29,13 +29,18 @@ object RetrofitClient {
 
     private val headerInterceptor = Interceptor { chain ->
         val original = chain.request()
-        val request = original.newBuilder()
+        val requestBuilder = original.newBuilder()
             .header("Accept", "application/json")
             .header("Content-Type", "application/json")
             .header("X-Tunnel-Skip-Anti-Abuse", "true")
-            .method(original.method, original.body)
-            .build()
-        chain.proceed(request)
+
+        val token = NetworkConfig.currentAuthToken
+        if (!token.isNullOrEmpty()) {
+            requestBuilder.header("Authorization", "Bearer $token")
+            requestBuilder.header("X-Auth-Token", token)
+        }
+
+        chain.proceed(requestBuilder.method(original.method, original.body).build())
     }
 
     val okHttpClient: OkHttpClient by lazy {

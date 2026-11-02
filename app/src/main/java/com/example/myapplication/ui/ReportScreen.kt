@@ -35,8 +35,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,21 +60,28 @@ fun ReportScreen(
     onDownloadClick: () -> Unit = {},
     onShareClick: () -> Unit = {}
 ) {
+    val uriHandler = LocalUriHandler.current
     val currentDateStr = SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date())
     val effectiveDate = analysisResult?.formattedDate ?: analysisResult?.timestamp ?: "Generated $currentDateStr"
+    val isInsufficient = analysisResult?.isInsufficientEvidence == true
     val effectiveScore = analysisResult?.trustScore ?: 62
     val effectiveVerdict = analysisResult?.verdict ?: "Needs Further Verification"
     val effectiveTitle = analysisResult?.title?.ifEmpty { null } ?: "Submitted News Analysis"
     val effectiveSummary = analysisResult?.summary?.ifEmpty { null }
-        ?: "The claim contains language patterns that warrant caution. Due to ambiguous indicators, independent verification is recommended."
-    val effectiveCredibility = analysisResult?.sourceCredibility ?: (if (effectiveScore >= 75) "Verified Source" else "Unverified / Caution")
+        ?: if (isInsufficient)
+            "No authoritative records or fact-checking investigations were identified in public archives for this claim. Independent verification is required before confirming."
+        else
+            "The claim contains language patterns that warrant caution. Due to ambiguous indicators, independent verification is recommended."
+    val effectiveCredibility = analysisResult?.sourceCredibility ?: (if (isInsufficient) "Unverified / No Matching Records" else if (effectiveScore >= 75) "Verified Source" else "Unverified / Caution")
     val effectiveDomain = analysisResult?.domain
         ?: analysisResult?.supportingSources?.firstOrNull()?.domain
         ?: "factcheck.org"
 
     val scoreColor = when {
+        isInsufficient -> WarningYellow
         effectiveScore >= 75 -> HighTrustGreen
-        effectiveScore >= 45 -> CyanAccent
+        effectiveVerdict.contains("Misleading", ignoreCase = true) -> Color(0xFFFB923C)
+        effectiveScore >= 36 -> CyanAccent
         else -> CoralWarningRed
     }
 
@@ -250,7 +259,7 @@ fun ReportScreen(
                                     color = Color(0x331E293B),
                                     style = Stroke(width = 6.dp.toPx())
                                 )
-                                val sweep = (effectiveScore / 100f) * 360f
+                                val sweep = if (isInsufficient) 0f else (effectiveScore / 100f) * 360f
                                 drawArc(
                                     color = scoreColor,
                                     startAngle = -90f,
@@ -260,11 +269,137 @@ fun ReportScreen(
                                 )
                             }
                             Text(
-                                text = "$effectiveScore%",
+                                text = if (isInsufficient) "--" else "$effectiveScore%",
                                 color = scoreColor,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.ExtraBold
                             )
+                        }
+                    }
+                }
+            }
+
+            // 2a. Risk Classification Card
+            if (!analysisResult?.riskLevel.isNullOrBlank() || !analysisResult?.riskExplanation.isNullOrBlank()) {
+                item {
+                    val riskCardColor = when (analysisResult?.riskLevel?.uppercase()) {
+                        "CRITICAL MISINFORMATION RISK" -> CoralWarningRed
+                        "HIGH RISK" -> Color(0xFFFB923C)
+                        "MODERATE CAUTION RISK" -> WarningYellow
+                        "MINIMAL RISK" -> HighTrustGreen
+                        else -> TealBright
+                    }
+                    Card(
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                        border = BorderStroke(1.dp, riskCardColor.copy(alpha = 0.5f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "🛡️ RISK CLASSIFICATION: ",
+                                    color = riskCardColor,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                )
+                                Text(
+                                    text = analysisResult?.riskLevel ?: "Evaluated",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                            }
+                            Text(
+                                text = analysisResult?.riskExplanation ?: "Evaluated against public news wires, registries, and fact-checking archives.",
+                                color = Color(0xFF94A3B8),
+                                fontSize = 12.sp,
+                                lineHeight = 17.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 2b. Sub-Claims Decomposition Card (For Compound Claims)
+            if (!analysisResult?.subClaims.isNullOrEmpty()) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "•• ",
+                                color = TealBright,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "COMPOUND CLAIM DECOMPOSITION",
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.2.sp
+                            )
+                        }
+
+                        Card(
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                            border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                analysisResult!!.subClaims.forEach { sc ->
+                                    val scColor = when (sc.status.uppercase()) {
+                                        "VERIFIED" -> HighTrustGreen
+                                        "FALSE" -> CoralWarningRed
+                                        "MISLEADING" -> Color(0xFFFB923C)
+                                        else -> WarningYellow
+                                    }
+                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = scColor.copy(alpha = 0.18f),
+                                                border = BorderStroke(1.dp, scColor.copy(alpha = 0.5f))
+                                            ) {
+                                                Text(
+                                                    text = sc.status.uppercase(),
+                                                    color = scColor,
+                                                    fontSize = 8.sp,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+                                        Text(
+                                            text = sc.statement,
+                                            color = Color.White,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            lineHeight = 16.sp
+                                        )
+                                        if (sc.evidenceSources.isNotEmpty()) {
+                                            Text(
+                                                text = "Sources: ${sc.evidenceSources.joinToString(", ")}",
+                                                color = Color(0xFF64748B),
+                                                fontSize = 10.sp
+                                            )
+                                        }
+                                    }
+                                    HorizontalDivider(color = Color(0x1AFFFFFF))
+                                }
+                            }
                         }
                     }
                 }
@@ -385,11 +520,197 @@ fun ReportScreen(
                             Spacer(modifier = Modifier.height(10.dp))
                             ReportMetaRow(label = "Trust Score", value = "$effectiveScore%")
                             Spacer(modifier = Modifier.height(10.dp))
-                            ReportMetaRow(label = "Analysis Method", value = "TruthLens AI Engine")
+                            ReportMetaRow(label = "Analysis Method", value = "Dynamic AI Fact-Check Engine")
                             Spacer(modifier = Modifier.height(10.dp))
                             ReportMetaRow(label = "Source Verification", value = effectiveCredibility)
                             Spacer(modifier = Modifier.height(10.dp))
                             ReportMetaRow(label = "Primary Source", value = effectiveDomain)
+                            if (!analysisResult?.searchTime.isNullOrBlank()) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                ReportMetaRow(label = "Search / Verified Time", value = analysisResult!!.searchTime!!)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 4a. Supporting Evidence Section
+            val suppEv = analysisResult?.supportingEvidence
+            if (!suppEv.isNullOrBlank()) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = "•• ", color = HighTrustGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "SUPPORTING EVIDENCE", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                        }
+                        Card(
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                            border = BorderStroke(1.dp, HighTrustGreen.copy(alpha = 0.4f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = suppEv,
+                                    color = Color(0xFFCBD5E1),
+                                    fontSize = 12.sp,
+                                    lineHeight = 18.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 4b. Contradicting Evidence Section (if present)
+            val contraEv = analysisResult?.contradictingEvidence
+            if (!contraEv.isNullOrBlank()) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = "•• ", color = CoralWarningRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "CONTRADICTING EVIDENCE", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                        }
+                        Card(
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                            border = BorderStroke(1.dp, CoralWarningRed.copy(alpha = 0.4f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = contraEv,
+                                    color = Color(0xFFCBD5E1),
+                                    fontSize = 12.sp,
+                                    lineHeight = 18.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 4c. Referenced Sources with Publication Dates & Clickable Links
+            val allSources = (analysisResult?.supportingSources ?: emptyList()) + (analysisResult?.contradictingSources ?: emptyList())
+            if (allSources.isNotEmpty()) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = "•• ", color = TealBright, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "REFERENCED SOURCES", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                        }
+                        Card(
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                            border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                allSources.forEach { source ->
+                                    val isContra = source.stance.equals("contradicts", ignoreCase = true)
+                                    val badgeColor = if (isContra) CoralWarningRed else HighTrustGreen
+                                    val badgeText = if (isContra) "CONTRADICTS" else "SUPPORTS"
+
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = Color(0x261E293B),
+                                        border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                if (!source.url.isNullOrBlank()) {
+                                                    try { uriHandler.openUri(source.url) } catch (_: Exception) {}
+                                                }
+                                            }
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = source.name,
+                                                    color = Color.White,
+                                                    fontSize = 13.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Surface(
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    color = badgeColor.copy(alpha = 0.15f),
+                                                    border = BorderStroke(0.8.dp, badgeColor.copy(alpha = 0.5f))
+                                                ) {
+                                                    Text(
+                                                        text = badgeText,
+                                                        color = badgeColor,
+                                                        fontSize = 8.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            }
+                                            if (!source.publishedDate.isNullOrBlank()) {
+                                                Spacer(modifier = Modifier.height(2.dp))
+                                                Text(
+                                                    text = "Date: ${source.publishedDate}",
+                                                    color = Color(0xFF94A3B8),
+                                                    fontSize = 10.sp
+                                                )
+                                            }
+                                            if (!source.details.isNullOrBlank()) {
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = source.details,
+                                                    color = Color(0xFFCBD5E1),
+                                                    fontSize = 11.sp,
+                                                    maxLines = 2,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                            if (!source.url.isNullOrBlank()) {
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = "🔗 " + (source.domain ?: source.url),
+                                                    color = CyanAccent,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 4d. Verification Limitations Section (if present)
+            val limitations = analysisResult?.verificationLimitations
+            if (!limitations.isNullOrBlank()) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = "•• ", color = Color(0xFFA78BFA), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "VERIFICATION LIMITATIONS", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                        }
+                        Card(
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                            border = BorderStroke(1.dp, Color(0x33A78BFA)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = limitations,
+                                    color = Color(0xFFCBD5E1),
+                                    fontSize = 12.sp,
+                                    lineHeight = 18.sp
+                                )
+                            }
                         }
                     }
                 }

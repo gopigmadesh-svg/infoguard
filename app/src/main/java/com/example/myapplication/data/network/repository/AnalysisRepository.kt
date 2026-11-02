@@ -1,6 +1,7 @@
 package com.example.myapplication.data.network.repository
 
 import com.example.myapplication.data.network.client.DirectApiClient
+import com.example.myapplication.data.network.client.NetworkConfig
 import com.example.myapplication.data.network.client.RetrofitClient
 import com.example.myapplication.data.network.model.AnalysisResultDto
 import com.example.myapplication.data.network.model.AnalyzeClaimRequest
@@ -40,15 +41,24 @@ class AnalysisRepository {
 
     suspend fun getRecentScans(
         userId: Int,
-        limit: Int = 10
+        limit: Int = 10,
+        token: String? = null
     ): Result<List<RecentScanDto>> = withContext(Dispatchers.IO) {
         try {
+            val resolvedToken = token ?: NetworkConfig.currentAuthToken
             val response = try {
-                apiService.getRecentScans(userId, limit)
+                apiService.getRecentScans(userId, limit, resolvedToken)
             } catch (e: Exception) {
+                val params = mutableMapOf(
+                    "user_id" to userId.toString(),
+                    "limit" to limit.toString()
+                )
+                if (!resolvedToken.isNullOrEmpty()) {
+                    params["token"] = resolvedToken
+                }
                 DirectApiClient.getJson<List<RecentScanDto>>(
                     "analysis/get_recent_scans.php",
-                    mapOf("user_id" to userId.toString(), "limit" to limit.toString())
+                    params
                 )
             }
 

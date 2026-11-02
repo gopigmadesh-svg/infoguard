@@ -1,5 +1,10 @@
 package com.example.myapplication.ui
 
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.runtime.LaunchedEffect
+import com.example.myapplication.data.network.repository.SessionManager
+import com.example.myapplication.data.network.repository.AnalysisRepository
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -161,6 +166,66 @@ fun HistoryScreen(
                 )
             )
         )
+    }
+
+    val isPreview = LocalInspectionMode.current
+    val context = LocalContext.current
+    val sessionManager = remember { SessionManager(context) }
+    val analysisRepo = remember { AnalysisRepository() }
+    val currentUserId = remember(sessionManager.currentUserId) { sessionManager.currentUserId }
+
+    LaunchedEffect(currentUserId) {
+        if (!isPreview && currentUserId > 0) {
+            val result = analysisRepo.getRecentScans(currentUserId, limit = 50)
+            result.onSuccess { scans ->
+                if (scans.isNotEmpty()) {
+                    allChecks.clear()
+                    scans.forEach { scan ->
+                        val isTrue = scan.verdict.contains("True", ignoreCase = true) || scan.verdict.contains("Verified", ignoreCase = true)
+                        val isFalse = scan.verdict.contains("False", ignoreCase = true) || scan.verdict.contains("Fake", ignoreCase = true)
+                        val isMisleading = scan.verdict.contains("Misleading", ignoreCase = true) || scan.verdict.contains("Partial", ignoreCase = true)
+
+                        val statusText = when {
+                            isFalse -> "FALSE"
+                            isMisleading -> "MISLEADING"
+                            isTrue -> "VERIFIED / TRUE"
+                            else -> "NEEDS VERIFICATION"
+                        }
+                        val statusColor = when {
+                            isFalse -> LowTrustRed
+                            isMisleading -> WarningYellow
+                            isTrue -> HighTrustGreen
+                            else -> Color(0xFF94A3B8)
+                        }
+                        val filterType = when {
+                            isFalse -> "False"
+                            isMisleading -> "Misleading"
+                            isTrue -> "Mostly True"
+                            else -> "All"
+                        }
+                        val icon = if (isFalse) "🚨" else if (isMisleading) "⚠️" else "📄"
+
+                        allChecks.add(
+                            HistoryCheckItem(
+                                id = scan.id.toString(),
+                                title = scan.title,
+                                categoryAndDate = "${scan.scanType.replaceFirstChar { it.uppercase() }} • ${if (scan.createdAt.length >= 10) scan.createdAt.take(10) else scan.createdAt}",
+                                statusText = statusText,
+                                statusColor = statusColor,
+                                iconEmoji = icon,
+                                filterType = filterType,
+                                isBookmarked = false,
+                                verdictReason = if (scan.isInsufficientEvidence || scan.trustScore == null) "Trust Score: N/A - Insufficient Evidence" else "Trust Score: ${scan.trustScore}% - Credibility: ${scan.sourceCredibility ?: "Standard"}",
+                                explanation = "Scan #${scan.id} verified with TruthLens Fact-Checking Engine. Final verdict recorded as: ${scan.verdict}.",
+                                sources = listOf(
+                                    ReliableSource(scan.sourceCredibility ?: "Verified Web / Wire Source", "Scan #${scan.id}", scan.trustScore ?: 0)
+                                )
+                            )
+                        )
+                    }
+                }
+            }
+        }
     }
 
     val filteredList = allChecks.filter { item ->

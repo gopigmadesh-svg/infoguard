@@ -39,6 +39,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.myapplication.data.network.model.AnalysisResultDto
+import com.example.myapplication.data.network.model.AnalysisSourceDto
 
 data class ComparisonSourceItem(
     val id: String,
@@ -57,18 +58,28 @@ fun CompareSourcesScreen(
     onOpenReportClick: () -> Unit = {},
     onFilterClick: () -> Unit = {}
 ) {
-    val sourcesList = if (!analysisResult?.supportingSources.isNullOrEmpty()) {
-        analysisResult!!.supportingSources.mapIndexed { idx, s ->
+    val allSources = mutableListOf<AnalysisSourceDto>()
+    if (analysisResult != null) {
+        allSources.addAll(analysisResult.supportingSources)
+        allSources.addAll(analysisResult.contradictingSources)
+    }
+
+    val sourcesList = if (allSources.isNotEmpty()) {
+        allSources.mapIndexed { idx, s ->
             val score = s.matchPercentage
+            val isContradicting = s.stance.equals("contradicts", ignoreCase = true)
             val (color, emoji, bgColor) = when {
-                score >= 80 -> Triple(HighTrustGreen, "📄", Color(0x2610B981))
+                isContradicting -> Triple(LowTrustRed, "✕", Color(0x26F87171))
+                score >= 80 -> Triple(HighTrustGreen, "✓", Color(0x2610B981))
                 score >= 50 -> Triple(WarningYellow, "📰", Color(0x26F59E0B))
                 else -> Triple(LowTrustRed, "🚨", Color(0x26F87171))
             }
+            val dateLabel = if (!s.publishedDate.isNullOrBlank()) " • ${s.publishedDate}" else ""
+            val stanceLabel = if (isContradicting) "[Contradicting] " else ""
             ComparisonSourceItem(
                 id = (idx + 1).toString(),
                 name = s.name,
-                note = s.details ?: (s.domain ?: "Verified Reference Registry"),
+                note = stanceLabel + (s.details ?: (s.domain ?: "Verified Reference Registry")) + dateLabel,
                 score = score,
                 scoreColor = color,
                 iconEmoji = emoji,

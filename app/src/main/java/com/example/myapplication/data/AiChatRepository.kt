@@ -31,20 +31,20 @@ enum class AiModelOption(
     val badge: String,
     val description: String
 ) {
-    GEMINI_15_FLASH(
-        id = "gemini-1.5-flash",
-        displayName = "Gemini 1.5 Flash",
+    GEMINI_31_FLASH_LITE(
+        id = "gemini-3.1-flash-lite",
+        displayName = "Gemini 3.1 Flash-Lite",
         provider = "gemini",
-        modelCode = "gemini-1.5-flash",
-        badge = "Recommended",
-        description = "High-speed, fact-checking and misinformation verification"
+        modelCode = "gemini-3.1-flash-lite",
+        badge = "Active (Fast)",
+        description = "High-speed, live Gemini reasoning for fact-checking & misinformation detection"
     ),
-    GEMINI_20_FLASH(
-        id = "gemini-2.0-flash",
-        displayName = "Gemini 2.0 Flash",
+    GEMINI_35_FLASH(
+        id = "gemini-3.5-flash",
+        displayName = "Gemini 3.5 Flash",
         provider = "gemini",
-        modelCode = "gemini-2.0-flash",
-        badge = "Next-Gen",
+        modelCode = "gemini-3.5-flash",
+        badge = "Deep Reasoning",
         description = "Advanced reasoning, cross-source synthesis & bias analysis"
     ),
     OPENAI_GPT4O_MINI(
@@ -58,7 +58,9 @@ enum class AiModelOption(
 
     companion object {
         fun fromId(id: String): AiModelOption {
-            return entries.firstOrNull { it.id.equals(id, ignoreCase = true) } ?: GEMINI_15_FLASH
+            return entries.firstOrNull { it.id.equals(id, ignoreCase = true) }
+                ?: entries.firstOrNull { it.modelCode.equals(id, ignoreCase = true) }
+                ?: GEMINI_31_FLASH_LITE
         }
     }
 }
@@ -117,8 +119,8 @@ object AiChatRepository {
     private const val KEY_SELECTED_MODEL = "selected_ai_model"
     private const val KEY_SELECTED_FOCUS = "selected_ai_focus"
 
-    // User-configurable preferences
-    var selectedModel: AiModelOption = AiModelOption.GEMINI_15_FLASH
+    // User-configurable preferences (Defaults to active, high-speed Gemini 3.1 Flash-Lite)
+    var selectedModel: AiModelOption = AiModelOption.GEMINI_31_FLASH_LITE
     var selectedFocus: AiVerificationFocus = AiVerificationFocus.FACT_CHECK
 
     // Backward-compatible properties
@@ -126,15 +128,21 @@ object AiChatRepository {
     var selectedProvider: AiProvider
         get() = if (selectedModel.provider == "openai") AiProvider.OPENAI else AiProvider.GEMINI
         set(value) {
-            selectedModel = if (value == AiProvider.OPENAI) AiModelOption.OPENAI_GPT4O_MINI else AiModelOption.GEMINI_15_FLASH
+            selectedModel = if (value == AiProvider.OPENAI) AiModelOption.OPENAI_GPT4O_MINI else AiModelOption.GEMINI_31_FLASH_LITE
         }
     var customBackendUrl: String = ""
 
     fun loadPreferences(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val savedModelId = prefs.getString(KEY_SELECTED_MODEL, AiModelOption.GEMINI_15_FLASH.id) ?: AiModelOption.GEMINI_15_FLASH.id
+        val savedModelId = prefs.getString(KEY_SELECTED_MODEL, AiModelOption.GEMINI_31_FLASH_LITE.id) ?: AiModelOption.GEMINI_31_FLASH_LITE.id
         val savedFocusId = prefs.getString(KEY_SELECTED_FOCUS, AiVerificationFocus.FACT_CHECK.id) ?: AiVerificationFocus.FACT_CHECK.id
-        selectedModel = AiModelOption.fromId(savedModelId)
+        
+        // Auto-migrate legacy deprecated model identifiers to active Gemini 3.1 Flash-Lite
+        selectedModel = if (savedModelId.contains("gemini-1.5") || savedModelId.contains("gemini-2.0") || savedModelId.contains("gemini-pro")) {
+            AiModelOption.GEMINI_31_FLASH_LITE
+        } else {
+            AiModelOption.fromId(savedModelId)
+        }
         selectedFocus = AiVerificationFocus.fromId(savedFocusId)
     }
 

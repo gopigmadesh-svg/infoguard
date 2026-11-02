@@ -1,5 +1,6 @@
 package com.example.myapplication.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -23,36 +24,35 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalInspectionMode
-import com.example.myapplication.data.network.repository.ProfileRepository
-import com.example.myapplication.data.network.repository.SessionManager
-import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.myapplication.data.network.model.UserDto
+import com.example.myapplication.data.network.repository.ProfileRepository
+import com.example.myapplication.data.network.repository.SessionManager
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -67,9 +67,11 @@ fun ProfileSetupScreen(
     val profileRepo = remember { ProfileRepository() }
 
     val currentUserId = remember { if (sessionManager.currentUserId > 0) sessionManager.currentUserId else 1 }
-    var name by remember { mutableStateOf(sessionManager.currentUserName.ifEmpty { "Alex Morgan" }) }
+    var name by remember { mutableStateOf(sessionManager.currentUserName.ifEmpty { "TruthLens User" }) }
+    var bio by remember { mutableStateOf(sessionManager.currentUserBio) }
     var language by remember { mutableStateOf("English (US)") }
     var alertEnabled by remember { mutableStateOf(true) }
+    var isSaving by remember { mutableStateOf(false) }
 
     val selectedInterests = remember {
         mutableStateListOf("News", "Science", "Technology")
@@ -82,10 +84,11 @@ fun ProfileSetupScreen(
     val allInterests = listOf("News", "Politics", "Science", "Health", "Technology", "Social Media")
 
     LaunchedEffect(currentUserId) {
-        if (!isPreview) {
+        if (!isPreview && currentUserId > 0) {
             val result = profileRepo.getProfile(currentUserId)
             result.onSuccess { profile ->
                 if (profile.name.isNotBlank()) name = profile.name
+                if (!profile.bio.isNullOrBlank()) bio = profile.bio
                 if (profile.language.isNotBlank()) language = profile.language
                 alertEnabled = profile.notificationsEnabled
                 if (profile.interests.isNotEmpty()) {
@@ -160,7 +163,7 @@ fun ProfileSetupScreen(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Choose how you want to explore and verify information.",
+                            text = "Update your profile information and preferences.",
                             color = Color(0xFF94A3B8),
                             fontSize = 12.sp,
                             lineHeight = 16.sp
@@ -205,7 +208,44 @@ fun ProfileSetupScreen(
                 }
             }
 
-            // 3. Preferred Language Field
+            // 3. Your Bio Field
+            item {
+                Column {
+                    Text(
+                        text = "BIO / ABOUT",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    OutlinedTextField(
+                        value = bio,
+                        onValueChange = { bio = it },
+                        placeholder = {
+                            Text(
+                                text = "Add a short bio or description...",
+                                color = Color(0xFF64748B),
+                                fontSize = 13.sp
+                            )
+                        },
+                        minLines = 2,
+                        maxLines = 4,
+                        shape = RoundedCornerShape(16.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CyanAccent,
+                            unfocusedBorderColor = Color(0x33FFFFFF),
+                            focusedContainerColor = Color(0xFF0F172A),
+                            unfocusedContainerColor = Color(0xFF0F172A),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
+            // 4. Preferred Language Field
             item {
                 Column {
                     Text(
@@ -241,7 +281,7 @@ fun ProfileSetupScreen(
                 }
             }
 
-            // 4. Main Interests (Choice Chips)
+            // 5. Main Interests (Choice Chips)
             item {
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -306,7 +346,7 @@ fun ProfileSetupScreen(
                 }
             }
 
-            // 5. Preferred Content (3-Card Grid Row)
+            // 6. Preferred Content (3-Card Grid Row)
             item {
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -365,7 +405,7 @@ fun ProfileSetupScreen(
                 }
             }
 
-            // 6. Fact-Checking Preferences
+            // 7. Fact-Checking Preferences
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -460,38 +500,30 @@ fun ProfileSetupScreen(
                 }
             }
 
-            // 7. Save Preferences Button
+            // 8. Save Preferences Button
             item {
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
+                    enabled = !isSaving,
                     onClick = {
                         if (!isPreview) {
+                            isSaving = true
                             coroutineScope.launch {
                                 val result = profileRepo.updateProfile(
                                     userId = currentUserId,
-                                    name = name,
+                                    name = name.trim(),
+                                    bio = bio.trim(),
                                     language = language,
                                     interests = selectedInterests.toList(),
                                     notificationsEnabled = alertEnabled
                                 )
-                                result.onSuccess {
-                                    sessionManager.saveUser(
-                                        UserDto(
-                                            id = currentUserId,
-                                            name = name,
-                                            email = sessionManager.currentUserEmail
-                                        )
-                                    )
+                                isSaving = false
+                                result.onSuccess { updatedProfile ->
+                                    sessionManager.saveUserProfile(updatedProfile)
                                     Toast.makeText(context, "Preferences saved successfully!", Toast.LENGTH_SHORT).show()
                                     onSavePreferences()
-                                }.onFailure {
-                                    sessionManager.saveUser(
-                                        UserDto(
-                                            id = currentUserId,
-                                            name = name,
-                                            email = sessionManager.currentUserEmail
-                                        )
-                                    )
+                                }.onFailure { err ->
+                                    sessionManager.updateProfile(name = name.trim(), bio = bio.trim())
                                     Toast.makeText(context, "Preferences saved locally.", Toast.LENGTH_SHORT).show()
                                     onSavePreferences()
                                 }
@@ -506,12 +538,20 @@ fun ProfileSetupScreen(
                         .fillMaxWidth()
                         .height(54.dp)
                 ) {
-                    Text(
-                        text = "Save Preferences",
-                        color = DarkNavyStart,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    if (isSaving) {
+                        CircularProgressIndicator(
+                            color = DarkNavyStart,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    } else {
+                        Text(
+                            text = "Save Preferences",
+                            color = DarkNavyStart,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }

@@ -67,13 +67,13 @@ data class UserProfileDto(
     val id: Int = 0,
 
     @SerializedName("name")
-    val name: String = "Alex Morgan",
+    val name: String = "",
 
     @SerializedName("email")
-    val email: String = "alex.morgan@example.com",
+    val email: String = "",
 
     @SerializedName("bio")
-    val bio: String = "Senior Digital Media Researcher",
+    val bio: String? = null,
 
     @SerializedName("avatar_url")
     val avatarUrl: String? = null,

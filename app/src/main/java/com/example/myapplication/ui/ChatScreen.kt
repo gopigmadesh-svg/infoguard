@@ -24,8 +24,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -49,8 +53,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,12 +69,8 @@ import androidx.compose.ui.window.Dialog
 import com.example.myapplication.data.AiChatRepository
 import com.example.myapplication.data.AiModelOption
 import com.example.myapplication.data.AiVerificationFocus
-import com.example.myapplication.data.network.client.NetworkConfig
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.platform.LocalContext
-import com.example.myapplication.data.AiProvider
 import com.example.myapplication.data.ChatHistoryMessage
+import com.example.myapplication.data.network.client.NetworkConfig
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -74,6 +81,7 @@ data class ChatMessage(
     val id: String = UUID.randomUUID().toString(),
     val text: String,
     val isUser: Boolean,
+    val isError: Boolean = false,
     val timestamp: String = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
 )
 
@@ -87,8 +95,13 @@ fun ChatScreen(
     var isTyping by remember { mutableStateOf(false) }
     var showConfigDialog by remember { mutableStateOf(false) }
 
+    var currentModel by remember { mutableStateOf(AiChatRepository.selectedModel) }
+    var currentFocus by remember { mutableStateOf(AiChatRepository.selectedFocus) }
+
     LaunchedEffect(Unit) {
         AiChatRepository.loadPreferences(context)
+        currentModel = AiChatRepository.selectedModel
+        currentFocus = AiChatRepository.selectedFocus
     }
 
     val coroutineScope = rememberCoroutineScope()
@@ -97,9 +110,9 @@ fun ChatScreen(
     val messages = remember {
         mutableStateListOf(
             ChatMessage(
-                text = "Hi! I'm TruthLens AI, your fact-checking assistant. How can I help you analyze a headline, verify a source, or spot misleading claims today?",
+                text = "Hi! I'm TruthLens AI, your fact-checking assistant. How can I help you analyze a headline, verify a claim, or detect misinformation today?",
                 isUser = false,
-                timestamp = "10:00 AM"
+                timestamp = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
             )
         )
     }
@@ -108,7 +121,7 @@ fun ChatScreen(
         "How do I spot fake news?",
         "Why was this claim flagged?",
         "How to verify health claims?",
-        "How to detect AI images?"
+        "How to detect AI generated content?"
     )
 
     fun startNewChat() {
@@ -131,13 +144,25 @@ fun ChatScreen(
         isTyping = true
 
         coroutineScope.launch {
-            // Auto scroll to bottom
+            // Scroll to user message
             listState.animateScrollToItem(messages.size)
 
-            val history = messages.map { ChatHistoryMessage(it.text, it.isUser) }
-            val responseText = AiChatRepository.fetchAiResponse(history, trimmed)
+            // Pass previous conversation turns excluding the current prompt
+            val history = messages
+                .dropLast(1)
+                .filter { !it.isError }
+                .map { ChatHistoryMessage(it.text, it.isUser) }
 
-            messages.add(ChatMessage(text = responseText, isUser = false))
+            val responseText = AiChatRepository.fetchAiResponse(history, trimmed)
+            val isErrorResponse = responseText.startsWith("⚠️") || responseText.startsWith("Could not establish")
+
+            messages.add(
+                ChatMessage(
+                    text = responseText,
+                    isUser = false,
+                    isError = isErrorResponse
+                )
+            )
             isTyping = false
 
             listState.animateScrollToItem(messages.size)
@@ -222,7 +247,7 @@ fun ChatScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "Online • ${AiChatRepository.selectedModel.displayName}",
+                                        text = "Online • ${currentModel.displayName}",
                                         color = Color(0xFF94A3B8),
                                         fontSize = 11.sp
                                     )
@@ -293,14 +318,14 @@ fun ChatScreen(
 
                             Column {
                                 Text(
-                                    text = "Hi Alex, I'm your verification guide.",
+                                    text = "TruthLens Verification Assistant",
                                     color = Color.White,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "I can help you understand news, claims, and explore ways to verify them.",
+                                    text = "Powered by live Google Gemini reasoning. Ask questions, fact-check stories, or investigate claims.",
                                     color = Color(0xFF94A3B8),
                                     fontSize = 11.sp,
                                     lineHeight = 15.sp
@@ -333,7 +358,7 @@ fun ChatScreen(
                                     shape = RoundedCornerShape(14.dp),
                                     color = Color(0xFF0F172A),
                                     border = BorderStroke(1.dp, Color(0x33FFFFFF)),
-                                    modifier = Modifier.clickable { sendMessage(question) }
+                                    modifier = Modifier.clickable(enabled = !isTyping) { sendMessage(question) }
                                 ) {
                                     Text(
                                         text = question,
@@ -432,13 +457,24 @@ fun ChatScreen(
                         onValueChange = { inputText = it },
                         placeholder = {
                             Text(
-                                text = "Ask anything about news...",
+                                text = "Ask anything about news or fact-checking...",
                                 color = Color(0xFF64748B),
                                 fontSize = 13.sp
                             )
                         },
                         singleLine = true,
                         shape = RoundedCornerShape(20.dp),
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Sentences,
+                            imeAction = ImeAction.Send
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onSend = {
+                                if (inputText.isNotBlank() && !isTyping) {
+                                    sendMessage(inputText)
+                                }
+                            }
+                        ),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = CyanAccent,
                             unfocusedBorderColor = Color(0x33FFFFFF),
@@ -454,7 +490,7 @@ fun ChatScreen(
 
                     Surface(
                         shape = CircleShape,
-                        color = if (inputText.isNotBlank()) TealBright else Color(0xFF1E293B),
+                        color = if (inputText.isNotBlank() && !isTyping) TealBright else Color(0xFF1E293B),
                         modifier = Modifier
                             .size(48.dp)
                             .clickable(enabled = inputText.isNotBlank() && !isTyping) {
@@ -464,7 +500,7 @@ fun ChatScreen(
                         Box(contentAlignment = Alignment.Center) {
                             Text(
                                 text = "➤",
-                                color = if (inputText.isNotBlank()) DarkNavyStart else Color(0xFF64748B),
+                                color = if (inputText.isNotBlank() && !isTyping) DarkNavyStart else Color(0xFF64748B),
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -478,8 +514,85 @@ fun ChatScreen(
     // AI Config Dialog
     if (showConfigDialog) {
         AiConfigDialog(
-            onDismiss = { showConfigDialog = false }
+            onDismiss = { showConfigDialog = false },
+            onConfigUpdated = { newModel, newFocus ->
+                currentModel = newModel
+                currentFocus = newFocus
+            }
         )
+    }
+}
+
+/**
+ * Lightweight, formatted Markdown text parser for structured AI responses.
+ * Highlights headings, bullet points, and bold tokens cleanly in Compose.
+ */
+fun formatMarkdownText(rawText: String): AnnotatedString {
+    return buildAnnotatedString {
+        val lines = rawText.lines()
+        lines.forEachIndexed { index, line ->
+            val trimmedLine = line.trim()
+            when {
+                trimmedLine.startsWith("### ") -> {
+                    val headerText = trimmedLine.removePrefix("### ").trim()
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = CyanAccent, fontSize = 14.sp)) {
+                        append(headerText)
+                    }
+                }
+                trimmedLine.startsWith("## ") -> {
+                    val headerText = trimmedLine.removePrefix("## ").trim()
+                    withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold, color = CyanAccent, fontSize = 15.sp)) {
+                        append(headerText)
+                    }
+                }
+                trimmedLine.startsWith("# ") -> {
+                    val headerText = trimmedLine.removePrefix("# ").trim()
+                    withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold, color = Color.White, fontSize = 16.sp)) {
+                        append(headerText)
+                    }
+                }
+                trimmedLine.startsWith("* ") || trimmedLine.startsWith("- ") -> {
+                    val bulletBody = trimmedLine.substring(2)
+                    withStyle(SpanStyle(color = TealBright, fontWeight = FontWeight.Bold)) {
+                        append("• ")
+                    }
+                    appendFormattedSpans(bulletBody)
+                }
+                trimmedLine.startsWith("---") -> {
+                    withStyle(SpanStyle(color = Color(0x33FFFFFF))) {
+                        append("────────────────────")
+                    }
+                }
+                else -> {
+                    appendFormattedSpans(line)
+                }
+            }
+            if (index < lines.size - 1) {
+                append("\n")
+            }
+        }
+    }
+}
+
+private fun AnnotatedString.Builder.appendFormattedSpans(text: String) {
+    val boldTokens = text.split("**")
+    boldTokens.forEachIndexed { i, token ->
+        if (i % 2 == 1) {
+            withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = Color.White)) {
+                append(token)
+            }
+        } else {
+            val codeTokens = token.split("`")
+            codeTokens.forEachIndexed { j, codeToken ->
+                if (j % 2 == 1) {
+                    withStyle(SpanStyle(color = CyanAccent, background = Color(0x3300E5FF))) {
+                        append(codeToken)
+                    }
+                } else {
+                    append(codeToken)
+                }
+            }
+        }
     }
 }
 
@@ -526,19 +639,23 @@ fun ChatMessageBubble(message: ChatMessage) {
             }
         } else {
             // AI Response Message Bubble (Left-Aligned with Avatar)
+            val bubbleBorderColor = if (message.isError) Color(0xFFEF4444) else Color(0x3300E5FF)
+            val avatarBgColor = if (message.isError) Color(0x33EF4444) else Color(0xFF0F172A)
+            val avatarBorderColor = if (message.isError) Color(0xFFEF4444) else CyanAccent
+
             Row(
                 verticalAlignment = Alignment.Top,
-                modifier = Modifier.fillMaxWidth(0.92f)
+                modifier = Modifier.fillMaxWidth(0.95f)
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .size(32.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF0F172A))
-                        .border(1.dp, CyanAccent, CircleShape)
+                        .background(avatarBgColor)
+                        .border(1.dp, avatarBorderColor, CircleShape)
                 ) {
-                    Text(text = "✨", fontSize = 14.sp)
+                    Text(text = if (message.isError) "⚠️" else "✨", fontSize = 14.sp)
                 }
 
                 Spacer(modifier = Modifier.width(10.dp))
@@ -546,25 +663,39 @@ fun ChatMessageBubble(message: ChatMessage) {
                 Surface(
                     shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 4.dp, bottomEnd = 18.dp),
                     color = Color(0xFF0F172A),
-                    border = BorderStroke(1.dp, Color(0x3300E5FF)),
+                    border = BorderStroke(1.dp, bubbleBorderColor),
                     modifier = Modifier.weight(1f)
                 ) {
                     Column(
                         modifier = Modifier.padding(14.dp)
                     ) {
                         Text(
-                            text = message.text,
-                            color = Color.White,
+                            text = formatMarkdownText(message.text),
+                            color = if (message.isError) Color(0xFFFCA5A5) else Color(0xFFE2E8F0),
                             fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            lineHeight = 18.sp
+                            fontWeight = FontWeight.Normal,
+                            lineHeight = 19.sp
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = message.timestamp,
-                            color = Color(0xFF64748B),
-                            fontSize = 9.sp
-                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = message.timestamp,
+                                color = Color(0xFF64748B),
+                                fontSize = 9.sp
+                            )
+                            if (message.isError) {
+                                Text(
+                                    text = "Connection / System Alert",
+                                    color = Color(0xFFF87171),
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -574,7 +705,8 @@ fun ChatMessageBubble(message: ChatMessage) {
 
 @Composable
 fun AiConfigDialog(
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onConfigUpdated: (AiModelOption, AiVerificationFocus) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     var selectedModel by remember { mutableStateOf(AiChatRepository.selectedModel) }
@@ -595,7 +727,7 @@ fun AiConfigDialog(
             ) {
                 // Header
                 Text(
-                    text = "\u2699\uFE0F AI Model Configuration",
+                    text = "⚙️ AI Model Configuration",
                     color = Color.White,
                     fontSize = 17.sp,
                     fontWeight = FontWeight.ExtraBold
@@ -677,7 +809,7 @@ fun AiConfigDialog(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
-                                            text = "âœ“",
+                                            text = "✓",
                                             color = DarkNavyStart,
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold
@@ -736,7 +868,7 @@ fun AiConfigDialog(
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = "\uD83D\uDEE1\uFE0F", fontSize = 14.sp)
+                            Text(text = "🛡️", fontSize = 14.sp)
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "Zero Client-Side Key Exposure",
@@ -769,6 +901,7 @@ fun AiConfigDialog(
                     Button(
                         onClick = {
                             AiChatRepository.savePreferences(context, selectedModel, selectedFocus)
+                            onConfigUpdated(selectedModel, selectedFocus)
                             onDismiss()
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = TealBright),
@@ -798,7 +931,6 @@ fun AiConfigDialog(
         }
     }
 }
-
 
 @Preview(showBackground = true)
 @Composable

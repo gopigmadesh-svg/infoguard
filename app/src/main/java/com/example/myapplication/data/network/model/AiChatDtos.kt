@@ -16,7 +16,7 @@ data class AiChatRequest(
     val provider: String? = "gemini",
 
     @SerializedName("model")
-    val model: String? = "gemini-1.5-flash",
+    val model: String? = "gemini-3.1-flash-lite",
 
     @SerializedName("user_id")
     val userId: Int? = null
