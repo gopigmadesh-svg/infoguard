@@ -1,5 +1,9 @@
 package com.example.myapplication.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -16,33 +20,88 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.myapplication.data.network.model.AnalysisResultDto
+import com.example.myapplication.data.network.model.PageSignalDto
 
 @Composable
 fun UrlAnalysisScreen(
+    initialUrl: String = "",
+    analysisResult: AnalysisResultDto? = null,
     onBackClick: () -> Unit = {},
-    onAnalyzePageClick: () -> Unit = {},
+    onAnalyzePageClick: (String) -> Unit = {},
+    onViewFullReportClick: () -> Unit = {},
     onCopyLinkClick: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    var urlInput by remember(initialUrl, analysisResult) {
+        mutableStateOf(
+            analysisResult?.effectiveUrl
+                ?: analysisResult?.content
+                ?: initialUrl.ifBlank { "" }
+        )
+    }
+
+    val isAnalyzed = analysisResult != null
+    val displayDomain = remember(urlInput, analysisResult) {
+        analysisResult?.domain
+            ?: run {
+                val cleaned = urlInput.trim().removePrefix("https://").removePrefix("http://").removePrefix("www.")
+                cleaned.substringBefore("/").ifBlank { "example.com" }
+            }
+    }
+
+    val initials = remember(displayDomain) {
+        val parts = displayDomain.split(".")
+        if (parts.isNotEmpty() && parts[0].length >= 2) {
+            parts[0].take(2).uppercase()
+        } else {
+            "URL"
+        }
+    }
+
+    val isHttps = remember(urlInput, analysisResult) {
+        analysisResult?.isSslVerified ?: urlInput.trim().startsWith("https://", ignoreCase = true)
+    }
+
+    val scoreText = if (analysisResult?.isInsufficientEvidence == true || analysisResult?.trustScore == null) {
+        "N/A"
+    } else {
+        "${analysisResult.trustScore}%"
+    }
+
+    val scoreColor = when {
+        analysisResult?.isInsufficientEvidence == true || analysisResult?.trustScore == null -> WarningYellow
+        (analysisResult?.trustScore ?: 0) >= 70 -> HighTrustGreen
+        (analysisResult?.trustScore ?: 0) >= 40 -> WarningYellow
+        else -> LowTrustRed
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -125,7 +184,15 @@ fun UrlAnalysisScreen(
                         border = BorderStroke(1.dp, Color(0x3300E5FF)),
                         modifier = Modifier
                             .size(42.dp)
-                            .clickable { onCopyLinkClick() }
+                            .clickable {
+                                if (urlInput.isNotBlank()) {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                    val clip = ClipData.newPlainText("TruthLens URL", urlInput)
+                                    clipboard?.setPrimaryClip(clip)
+                                    Toast.makeText(context, "URL copied to clipboard", Toast.LENGTH_SHORT).show()
+                                }
+                                onCopyLinkClick()
+                            }
                     ) {
                         Box(
                             contentAlignment = Alignment.Center,
@@ -137,7 +204,57 @@ fun UrlAnalysisScreen(
                 }
             }
 
-            // 2. Main Domain Profile Card
+            // 2. URL Input Card (Visible when entering or editing URL)
+            if (!isAnalyzed) {
+                item {
+                    Card(
+                        shape = RoundedCornerShape(22.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                        border = BorderStroke(1.dp, Color(0x3300E5FF)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "WEBSITE OR ARTICLE LINK",
+                                    color = CyanAccent,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 1.sp
+                                )
+                            }
+
+                            OutlinedTextField(
+                                value = urlInput,
+                                onValueChange = { urlInput = it },
+                                placeholder = {
+                                    Text(
+                                        text = "https://example.com/article...",
+                                        color = Color(0xFF64748B),
+                                        fontSize = 13.sp
+                                    )
+                                },
+                                singleLine = true,
+                                shape = RoundedCornerShape(14.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = CyanAccent,
+                                    unfocusedBorderColor = Color(0x3300E5FF),
+                                    focusedContainerColor = Color(0xFF1E293B),
+                                    unfocusedContainerColor = Color(0xFF1E293B),
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 3. Main Domain Profile Card
             item {
                 Card(
                     shape = RoundedCornerShape(24.dp),
@@ -159,9 +276,9 @@ fun UrlAnalysisScreen(
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Text(
-                                    text = "DN",
+                                    text = initials,
                                     color = TealBright,
-                                    fontSize = 20.sp,
+                                    fontSize = 18.sp,
                                     fontWeight = FontWeight.ExtraBold
                                 )
                             }
@@ -176,7 +293,7 @@ fun UrlAnalysisScreen(
                                 border = BorderStroke(1.dp, Color(0x4D00E5FF))
                             ) {
                                 Text(
-                                    text = "NEWS OUTLET",
+                                    text = (analysisResult?.sourceCredibility ?: "WEB OUTLET").uppercase(),
                                     color = CyanAccent,
                                     fontSize = 8.sp,
                                     fontWeight = FontWeight.ExtraBold,
@@ -188,7 +305,7 @@ fun UrlAnalysisScreen(
                             Spacer(modifier = Modifier.height(6.dp))
 
                             Text(
-                                text = "dailynetwork.example/healthy-facts-article",
+                                text = if (urlInput.isNotBlank()) urlInput else "Enter a website link above",
                                 color = Color.White,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
@@ -199,17 +316,96 @@ fun UrlAnalysisScreen(
                             Spacer(modifier = Modifier.height(2.dp))
 
                             Text(
-                                text = "HTTPS Connection • SSL Verified",
-                                color = HighTrustGreen,
+                                text = if (isHttps) "HTTPS Connection • SSL Verified" else if (urlInput.isNotBlank()) "HTTP Connection • Unencrypted" else "Awaiting URL Input",
+                                color = if (isHttps) HighTrustGreen else WarningYellow,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium
                             )
+                        }
+
+                        if (isAnalyzed) {
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = scoreColor.copy(alpha = 0.18f),
+                                border = BorderStroke(1.dp, scoreColor.copy(alpha = 0.5f))
+                            ) {
+                                Text(
+                                    text = scoreText,
+                                    color = scoreColor,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            // 3. PAGE SIGNALS Section
+            // 4. Analysis Assessment Card (When Analyzed)
+            if (isAnalyzed) {
+                item {
+                    Card(
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                        border = BorderStroke(1.dp, scoreColor.copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "ASSESSMENT VERDICT",
+                                    color = scoreColor,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 1.sp
+                                )
+
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = scoreColor.copy(alpha = 0.2f),
+                                    border = BorderStroke(1.dp, scoreColor)
+                                ) {
+                                    Text(
+                                        text = analysisResult.verdict.uppercase(),
+                                        color = scoreColor,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = analysisResult.summary,
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                lineHeight = 18.sp
+                            )
+
+                            if (!analysisResult.evidenceSupportingScore.isNullOrBlank()) {
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Evidence Basis: ${analysisResult.evidenceSupportingScore}",
+                                    color = Color(0xFF94A3B8),
+                                    fontSize = 11.sp,
+                                    lineHeight = 15.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 5. PAGE SIGNALS Section
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -238,32 +434,66 @@ fun UrlAnalysisScreen(
                             modifier = Modifier.padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
-                            PageSignalRow(
-                                iconEmoji = "🌐",
-                                title = "Domain Credibility",
-                                subtitle = "Score of 72% calculated",
-                                iconBgColor = Color(0x2600E5FF)
-                            )
+                            if (analysisResult?.pageSignals?.isNotEmpty() == true) {
+                                analysisResult.pageSignals.forEach { signal ->
+                                    val iconBg = when (signal.status) {
+                                        "verified" -> Color(0x2610B981)
+                                        "warning" -> Color(0x26F59E0B)
+                                        "error" -> Color(0x26EF4444)
+                                        else -> Color(0x2600E5FF)
+                                    }
+                                    PageSignalRow(
+                                        iconEmoji = signal.iconEmoji.ifBlank { "🌐" },
+                                        title = signal.title,
+                                        subtitle = signal.subtitle,
+                                        iconBgColor = iconBg
+                                    )
+                                }
+                            } else {
+                                val credSubtitle = if (analysisResult != null && analysisResult.trustScore != null && !analysisResult.isInsufficientEvidence) {
+                                    "Score of ${analysisResult.trustScore}% calculated"
+                                } else if (analysisResult != null) {
+                                    "Score: N/A (Insufficient Evidence)"
+                                } else {
+                                    "Evaluates publisher authority and reputation"
+                                }
+                                PageSignalRow(
+                                    iconEmoji = "🌐",
+                                    title = "Domain Credibility",
+                                    subtitle = credSubtitle,
+                                    iconBgColor = Color(0x2600E5FF)
+                                )
 
-                            PageSignalRow(
-                                iconEmoji = "👤",
-                                title = "Author Transparency",
-                                subtitle = "Listed: Editorial Team (Verified)",
-                                iconBgColor = Color(0x267C3AED)
-                            )
+                                val authorSubtitle = when {
+                                    !analysisResult?.reasons.isNullOrEmpty() -> analysisResult.reasons.firstOrNull { it.contains("author", ignoreCase = true) || it.contains("editorial", ignoreCase = true) } ?: "Editorial byline and source verification"
+                                    else -> "Inspects author transparency and editorial disclosures"
+                                }
+                                PageSignalRow(
+                                    iconEmoji = "👤",
+                                    title = "Author Transparency",
+                                    subtitle = authorSubtitle,
+                                    iconBgColor = Color(0x267C3AED)
+                                )
 
-                            PageSignalRow(
-                                iconEmoji = "🛡️",
-                                title = "Security Footprint",
-                                subtitle = "Active SSL & WHOIS Records",
-                                iconBgColor = Color(0x2610B981)
-                            )
+                                val secSubtitle = when {
+                                    analysisResult != null && isHttps -> "Active SSL & Network Footprint Verified"
+                                    analysisResult != null -> "Insecure Connection • Potential Risk"
+                                    isHttps -> "HTTPS Connection • Active SSL Certificate"
+                                    else -> "Inspects SSL certificate and server headers"
+                                }
+                                PageSignalRow(
+                                    iconEmoji = "🛡️",
+                                    title = "Security Footprint",
+                                    subtitle = secSubtitle,
+                                    iconBgColor = Color(0x2610B981)
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            // 4. AI Context Disclaimer Note
+            // 6. AI Context Disclaimer Note
             item {
                 Card(
                     shape = RoundedCornerShape(16.dp),
@@ -291,25 +521,75 @@ fun UrlAnalysisScreen(
                 }
             }
 
-            // 5. Analyze This Page Button
+            // 7. Action Button
             item {
                 Spacer(modifier = Modifier.height(4.dp))
-                Button(
-                    onClick = onAnalyzePageClick,
-                    colors = ButtonDefaults.buttonColors(containerColor = TealBright),
-                    shape = RoundedCornerShape(18.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(54.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = "⚡ ", fontSize = 16.sp)
-                        Text(
-                            text = "Analyze This Page",
-                            color = DarkNavyStart,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                if (isAnalyzed) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Button(
+                            onClick = onViewFullReportClick,
+                            colors = ButtonDefaults.buttonColors(containerColor = TealBright),
+                            shape = RoundedCornerShape(18.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(54.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(text = "📊 ", fontSize = 16.sp)
+                                Text(
+                                    text = "View Full Report",
+                                    color = DarkNavyStart,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        Button(
+                            onClick = {
+                                urlInput = ""
+                                onAnalyzePageClick("")
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0x2600E5FF)),
+                            shape = RoundedCornerShape(18.dp),
+                            border = BorderStroke(1.dp, CyanAccent),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                        ) {
+                            Text(
+                                text = "Check Another URL",
+                                color = CyanAccent,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            val trimmed = urlInput.trim()
+                            if (trimmed.isBlank()) {
+                                Toast.makeText(context, "Please enter a website or article URL.", Toast.LENGTH_SHORT).show()
+                            } else {
+                                onAnalyzePageClick(trimmed)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = TealBright),
+                        shape = RoundedCornerShape(18.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(54.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = "⚡ ", fontSize = 16.sp)
+                            Text(
+                                text = "Analyze This Page",
+                                color = DarkNavyStart,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }
@@ -358,7 +638,9 @@ fun PageSignalRow(
                 Text(
                     text = subtitle,
                     color = Color(0xFF94A3B8),
-                    fontSize = 11.sp
+                    fontSize = 11.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }

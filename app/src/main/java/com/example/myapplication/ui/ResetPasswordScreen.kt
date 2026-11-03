@@ -3,6 +3,7 @@ package com.example.myapplication.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,6 +55,7 @@ import androidx.compose.ui.unit.sp
 fun ResetPasswordScreen(
     authViewModel: AuthViewModel? = null,
     email: String = "",
+    onBackClick: () -> Unit = {},
     onUpdatePasswordSuccess: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -108,8 +110,27 @@ fun ResetPasswordScreen(
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Start
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color(0x261E293B),
+                        border = BorderStroke(1.dp, Color(0x3300E5FF)),
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clickable { onBackClick() }
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.padding(10.dp)
+                        ) {
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                drawBackArrowIcon(color = Color.White, strokeWidth = 3.5f)
+                            }
+                        }
+                    }
+
                     Box(contentAlignment = Alignment.TopEnd) {
                         Surface(
                             shape = RoundedCornerShape(14.dp),

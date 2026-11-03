@@ -54,7 +54,12 @@ fun TrustScoreExplanationScreen(
     onCompareSourcesClick: () -> Unit = {},
     onShareClick: () -> Unit = {}
 ) {
-    val isInsufficient = analysisResult?.isInsufficientEvidence == true || hasInsufficientEvidence
+    val isInsufficient = analysisResult?.isInsufficientEvidence == true ||
+        hasInsufficientEvidence ||
+        analysisResult?.trustScore == null ||
+        (analysisResult?.verdict?.contains("Further", ignoreCase = true) == true) ||
+        (analysisResult?.verdict?.contains("Insufficient", ignoreCase = true) == true) ||
+        (analysisResult?.verdict?.contains("Unverified", ignoreCase = true) == true)
     val effectiveScore = analysisResult?.trustScore ?: score
     val effectiveTitle = analysisResult?.title?.ifEmpty { null } ?: claimTitle
     val rawDomain = analysisResult?.domain
@@ -294,7 +299,7 @@ fun TrustScoreExplanationScreen(
                                 }
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(
-                                        text = if (isInsufficient) "--" else "$effectiveScore%",
+                                        text = if (isInsufficient) "N/A" else "$effectiveScore%",
                                         color = Color.White,
                                         fontSize = 18.sp,
                                         fontWeight = FontWeight.ExtraBold

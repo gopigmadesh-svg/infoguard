@@ -1,5 +1,6 @@
 package com.example.myapplication
 
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -7,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -105,9 +107,25 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            MyApplicationTheme {
+            val context = LocalContext.current
+            val sessionManager = remember { SessionManager(context) }
+            var currentTheme by remember { mutableStateOf(sessionManager.appTheme) }
+
+            val isDarkTheme = when (currentTheme) {
+                "Light Mode" -> false
+                "Dark Cyan", "Midnight Navy", "Dark Mode" -> true
+                else -> isSystemInDarkTheme()
+            }
+
+            MyApplicationTheme(darkTheme = isDarkTheme) {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    MainAppNav()
+                    MainAppNav(
+                        currentTheme = currentTheme,
+                        onThemeChange = { newTheme ->
+                            currentTheme = newTheme
+                            sessionManager.appTheme = newTheme
+                        }
+                    )
                 }
             }
         }
@@ -115,7 +133,10 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MainAppNav() {
+fun MainAppNav(
+    currentTheme: String = "Dark Cyan",
+    onThemeChange: (String) -> Unit = {}
+) {
     val navigationStack = remember { mutableStateListOf(AppScreen.SPLASH) }
     val context = LocalContext.current
     val sessionManager = remember { SessionManager(context) }
@@ -123,6 +144,7 @@ fun MainAppNav() {
     val authViewModel = remember { AuthViewModel(authRepository) }
 
     var activeClaimText by remember { mutableStateOf("") }
+    var activeImageUri by remember { mutableStateOf<Uri?>(null) }
     var activeScanResult by remember { mutableStateOf<AnalysisResultDto?>(null) }
 
     val currentScreen = navigationStack.lastOrNull() ?: AppScreen.HOME
@@ -243,6 +265,9 @@ fun MainAppNav() {
                 ResetPasswordScreen(
                     authViewModel = authViewModel,
                     email = authViewModel.resetEmail.collectAsState().value,
+                    onBackClick = {
+                        goBack()
+                    },
                     onUpdatePasswordSuccess = {
                         navigationStack.clear()
                         navigationStack.add(AppScreen.LOGIN)
@@ -298,13 +323,17 @@ fun MainAppNav() {
                         navigateTo(AppScreen.ANALYSIS)
                     },
                     onScanNewsClick = { text ->
+                        activeImageUri = null
                         activeClaimText = text
                         navigateTo(AppScreen.ANALYSIS)
                     },
-                    onScanImageClick = { _, _ ->
-                        navigateTo(AppScreen.IMAGE_ANALYSIS)
+                    onScanImageClick = { uri, text ->
+                        activeImageUri = uri
+                        activeClaimText = text
+                        navigateTo(AppScreen.ANALYSIS)
                     },
                     onScanUrlClick = { url ->
+                        activeImageUri = null
                         activeClaimText = url
                         navigateTo(AppScreen.ANALYSIS)
                     },
@@ -328,32 +357,49 @@ fun MainAppNav() {
                     onBackClick = {
                         goBack()
                     },
-                    onCaptureClick = {
-                        navigateTo(AppScreen.IMAGE_ANALYSIS)
-                    },
-                    onGalleryClick = {
-                        navigateTo(AppScreen.IMAGE_ANALYSIS)
+                    onImageSelected = { uri ->
+                        activeImageUri = uri
+                        activeClaimText = ""
+                        navigateTo(AppScreen.ANALYSIS)
                     }
                 )
             }
             AppScreen.IMAGE_ANALYSIS -> {
                 ImageAnalysisScreen(
+                    analysisResult = activeScanResult,
+                    imageUri = activeImageUri,
                     onBackClick = {
                         goBack()
                     },
                     onStartFullAnalysisClick = {
                         navigateTo(AppScreen.ANALYSIS)
                     },
+                    onViewReportClick = {
+                        navigateTo(AppScreen.RESULT)
+                    },
                     onShareClick = { }
                 )
             }
             AppScreen.URL_ANALYSIS -> {
                 UrlAnalysisScreen(
+                    initialUrl = activeClaimText,
+                    analysisResult = if (activeScanResult?.scanType == "url") activeScanResult else null,
                     onBackClick = {
                         goBack()
                     },
-                    onAnalyzePageClick = {
-                        navigateTo(AppScreen.ANALYSIS)
+                    onAnalyzePageClick = { url ->
+                        if (url.isNotBlank()) {
+                            activeImageUri = null
+                            activeClaimText = url
+                            navigateTo(AppScreen.ANALYSIS)
+                        } else {
+                            activeImageUri = null
+                            activeClaimText = ""
+                            activeScanResult = null
+                        }
+                    },
+                    onViewFullReportClick = {
+                        navigateTo(AppScreen.RESULT)
                     },
                     onCopyLinkClick = { }
                 )
@@ -436,6 +482,7 @@ fun MainAppNav() {
             AppScreen.ANALYSIS -> {
                 AnalysisScreen(
                     claimText = activeClaimText,
+                    imageUri = activeImageUri,
                     userId = if (authRepository.getCurrentUserId() > 0) authRepository.getCurrentUserId() else null,
                     onBackClick = {
                         goBack()
@@ -577,8 +624,13 @@ fun MainAppNav() {
             }
             AppScreen.SETTINGS -> {
                 SettingsScreen(
+                    currentTheme = currentTheme,
+                    onThemeChange = onThemeChange,
                     onBackClick = {
                         goBack()
+                    },
+                    onNavigateToProfile = {
+                        switchTab(AppScreen.PROFILE)
                     },
                     onNavigateToPersonalInfo = {
                         navigateTo(AppScreen.PROFILE_SETUP)
@@ -600,6 +652,9 @@ fun MainAppNav() {
                     },
                     onNavigateToAbout = {
                         navigateTo(AppScreen.PRESENTATION_BOARD)
+                    },
+                    onLogOutClick = {
+                        navigateTo(AppScreen.LOGOUT)
                     }
                 )
             }

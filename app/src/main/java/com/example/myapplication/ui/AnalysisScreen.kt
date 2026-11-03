@@ -1,5 +1,6 @@
 package com.example.myapplication.ui
 
+import android.net.Uri
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -60,12 +61,14 @@ import kotlin.time.Duration.Companion.milliseconds
 @Composable
 fun AnalysisScreen(
     claimText: String = "",
+    imageUri: Uri? = null,
     userId: Int? = null,
     onBackClick: () -> Unit = {},
     onAnalysisComplete: () -> Unit = {},
     onAnalysisSuccess: (AnalysisResultDto) -> Unit = { _ -> },
     onError: (String) -> Unit = {}
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val isPreview = LocalInspectionMode.current
     val analysisRepository = remember { AnalysisRepository() }
 
@@ -100,8 +103,23 @@ fun AnalysisScreen(
                 animationSpec = tween(durationMillis = 1800, easing = FastOutSlowInEasing)
             )
 
-            val textToAnalyze = claimText.ifBlank { "Unspecified News Claim" }
-            val repoResult = analysisRepository.analyzeClaim(userId, textToAnalyze)
+            val repoResult = if (imageUri != null) {
+                analysisRepository.analyzeImageUri(
+                    context = context,
+                    userId = userId,
+                    imageUri = imageUri,
+                    claim = claimText.ifBlank { null },
+                    ocrText = claimText.ifBlank { null }
+                )
+            } else {
+                val trimmed = claimText.trim()
+                if (trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)) {
+                    analysisRepository.analyzeUrl(userId, trimmed)
+                } else {
+                    val textToAnalyze = claimText.ifBlank { "Unspecified News Claim" }
+                    analysisRepository.analyzeClaim(userId, textToAnalyze)
+                }
+            }
 
             if (repoResult.isSuccess) {
                 receivedResult = repoResult.getOrNull()
@@ -125,10 +143,11 @@ fun AnalysisScreen(
     }
 
     val currentProgress = (progressAnim.value * 100).toInt()
-    val displayClaim = if (claimText.isNotBlank()) {
-        if (claimText.length > 55) claimText.take(52) + "..." else claimText
-    } else {
-        "Submitted news article claim..."
+    val displayClaim = when {
+        imageUri != null && claimText.isNotBlank() -> if (claimText.length > 55) claimText.take(52) + "..." else claimText
+        imageUri != null -> "Visual Forensics & Media Analysis"
+        claimText.isNotBlank() -> if (claimText.length > 55) claimText.take(52) + "..." else claimText
+        else -> "Submitted news article claim..."
     }
 
     Box(
@@ -366,7 +385,7 @@ fun AnalysisScreen(
                                     .clip(RoundedCornerShape(10.dp))
                                     .background(Color(0x2600E5FF))
                             ) {
-                                Text(text = "📄", fontSize = 18.sp)
+                                Text(text = if (imageUri != null) "🖼️" else "📄", fontSize = 18.sp)
                             }
 
                             Spacer(modifier = Modifier.width(12.dp))
@@ -381,7 +400,7 @@ fun AnalysisScreen(
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "Analyzing NLP semantics and sources",
+                                    text = if (imageUri != null) "Analyzing visual forensics & manipulation signals" else "Analyzing NLP semantics and sources",
                                     color = Color(0xFF94A3B8),
                                     fontSize = 11.sp
                                 )

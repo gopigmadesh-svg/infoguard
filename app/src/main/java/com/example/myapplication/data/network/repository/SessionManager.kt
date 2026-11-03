@@ -30,6 +30,12 @@ class SessionManager(context: Context) {
         private const val KEY_USER_BIO = "user_bio"
         private const val KEY_USER_AVATAR = "user_avatar"
         private const val KEY_AUTH_TOKEN = "auth_token"
+        private const val KEY_APP_THEME = "app_theme"
+        private const val KEY_PUSH_NOTIFICATIONS = "push_notifications"
+        private const val KEY_FACT_CHECK_REMINDERS = "fact_check_reminders"
+        private const val KEY_WEEKLY_SUMMARY = "weekly_summary"
+        private const val KEY_PREFERRED_LANGUAGE = "preferred_language"
+        private const val KEY_TEXT_SCALE = "text_scale"
     }
 
     fun saveUser(user: UserDto, token: String? = null) {
@@ -98,7 +104,45 @@ class SessionManager(context: Context) {
     val authToken: String?
         get() = prefs.getString(KEY_AUTH_TOKEN, null)
 
+    var appTheme: String
+        get() = prefs.getString(KEY_APP_THEME, "Dark Cyan") ?: "Dark Cyan"
+        set(value) = prefs.edit().putString(KEY_APP_THEME, value).apply()
+
+    var pushNotificationsEnabled: Boolean
+        get() = prefs.getBoolean(KEY_PUSH_NOTIFICATIONS, true)
+        set(value) = prefs.edit().putBoolean(KEY_PUSH_NOTIFICATIONS, value).apply()
+
+    var factCheckRemindersEnabled: Boolean
+        get() = prefs.getBoolean(KEY_FACT_CHECK_REMINDERS, true)
+        set(value) = prefs.edit().putBoolean(KEY_FACT_CHECK_REMINDERS, value).apply()
+
+    var weeklySummaryEnabled: Boolean
+        get() = prefs.getBoolean(KEY_WEEKLY_SUMMARY, false)
+        set(value) = prefs.edit().putBoolean(KEY_WEEKLY_SUMMARY, value).apply()
+
+    var preferredLanguage: String
+        get() = prefs.getString(KEY_PREFERRED_LANGUAGE, "English") ?: "English"
+        set(value) = prefs.edit().putString(KEY_PREFERRED_LANGUAGE, value).apply()
+
+    var textScale: String
+        get() = prefs.getString(KEY_TEXT_SCALE, "Default (100%)") ?: "Default (100%)"
+        set(value) = prefs.edit().putString(KEY_TEXT_SCALE, value).apply()
+
+    fun clearSession() {
+        prefs.edit().apply {
+            remove(KEY_IS_LOGGED_IN)
+            remove(KEY_USER_ID)
+            remove(KEY_USER_NAME)
+            remove(KEY_USER_EMAIL)
+            remove(KEY_USER_BIO)
+            remove(KEY_USER_AVATAR)
+            remove(KEY_AUTH_TOKEN)
+            apply()
+        }
+        NetworkConfig.currentAuthToken = null
+    }
+
     fun logout() {
-        prefs.edit().clear().commit()
+        clearSession()
     }
 }

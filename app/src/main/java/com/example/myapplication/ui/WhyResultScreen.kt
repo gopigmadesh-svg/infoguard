@@ -43,7 +43,11 @@ fun WhyResultScreen(
     analysisResult: AnalysisResultDto? = null,
     onBackClick: () -> Unit = {}
 ) {
-    val isInsufficient = analysisResult?.isInsufficientEvidence == true
+    val isInsufficient = analysisResult?.isInsufficientEvidence == true ||
+        analysisResult?.trustScore == null ||
+        (analysisResult?.verdict?.contains("Further", ignoreCase = true) == true) ||
+        (analysisResult?.verdict?.contains("Insufficient", ignoreCase = true) == true) ||
+        (analysisResult?.verdict?.contains("Unverified", ignoreCase = true) == true)
     val effectiveScore = analysisResult?.trustScore ?: 24
     val effectiveTitle = analysisResult?.title?.ifEmpty { null }
         ?: analysisResult?.content?.ifEmpty { null }

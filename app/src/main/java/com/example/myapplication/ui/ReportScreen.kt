@@ -63,8 +63,12 @@ fun ReportScreen(
     val uriHandler = LocalUriHandler.current
     val currentDateStr = SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date())
     val effectiveDate = analysisResult?.formattedDate ?: analysisResult?.timestamp ?: "Generated $currentDateStr"
-    val isInsufficient = analysisResult?.isInsufficientEvidence == true
-    val effectiveScore = analysisResult?.trustScore ?: 62
+    val isInsufficient = analysisResult?.isInsufficientEvidence == true ||
+        analysisResult?.trustScore == null ||
+        (analysisResult?.verdict?.contains("Further", ignoreCase = true) == true) ||
+        (analysisResult?.verdict?.contains("Insufficient", ignoreCase = true) == true) ||
+        (analysisResult?.verdict?.contains("Unverified", ignoreCase = true) == true)
+    val effectiveScore = analysisResult?.trustScore ?: 0
     val effectiveVerdict = analysisResult?.verdict ?: "Needs Further Verification"
     val effectiveTitle = analysisResult?.title?.ifEmpty { null } ?: "Submitted News Analysis"
     val effectiveSummary = analysisResult?.summary?.ifEmpty { null }
@@ -269,7 +273,7 @@ fun ReportScreen(
                                 )
                             }
                             Text(
-                                text = if (isInsufficient) "--" else "$effectiveScore%",
+                                text = if (isInsufficient) "N/A" else "$effectiveScore%",
                                 color = scoreColor,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.ExtraBold
@@ -518,7 +522,7 @@ fun ReportScreen(
                             Spacer(modifier = Modifier.height(10.dp))
                             ReportMetaRow(label = "Verdict", value = effectiveVerdict)
                             Spacer(modifier = Modifier.height(10.dp))
-                            ReportMetaRow(label = "Trust Score", value = "$effectiveScore%")
+                            ReportMetaRow(label = "Trust Score", value = if (isInsufficient) "N/A" else "$effectiveScore%")
                             Spacer(modifier = Modifier.height(10.dp))
                             ReportMetaRow(label = "Analysis Method", value = "Dynamic AI Fact-Check Engine")
                             Spacer(modifier = Modifier.height(10.dp))

@@ -70,25 +70,28 @@ fun ResultScreen(
         rawVerdict.contains("Unverified", ignoreCase = true) ||
         rawVerdict.contains("Insufficient", ignoreCase = true)
 
+    val isAiGenerated = !isInsufficient && (rawVerdict.contains("AI-Generated", ignoreCase = true) || rawVerdict.contains("Synthetic", ignoreCase = true))
+
     val isFalse = if (analysisResult != null) {
-        !isInsufficient && (rawVerdict.contains("False", ignoreCase = true) || rawVerdict.contains("Fake", ignoreCase = true) || (analysisResult.trustScore != null && effectiveScore <= 35))
+        !isInsufficient && !isAiGenerated && (rawVerdict.contains("False", ignoreCase = true) || rawVerdict.contains("Fake", ignoreCase = true) || rawVerdict.contains("Manipulated", ignoreCase = true) || effectiveScore <= 35)
     } else {
         resultTypeState == 0
     }
 
-    val isMisleading = !isFalse && !isInsufficient && (
+    val isMisleading = !isFalse && !isInsufficient && !isAiGenerated && (
         rawVerdict.contains("Misleading", ignoreCase = true) ||
         rawVerdict.contains("Partial", ignoreCase = true) ||
         rawVerdict.contains("Exaggerat", ignoreCase = true)
     )
 
-    val isUnverified = isInsufficient || (!isFalse && !isMisleading && (
+    val isUnverified = isInsufficient || (!isFalse && !isMisleading && !isAiGenerated && (
         rawVerdict.contains("Unverified", ignoreCase = true) ||
         rawVerdict.contains("Further", ignoreCase = true) ||
         effectiveScore in 36..69
     ))
 
     val themeColor = when {
+        isAiGenerated -> Color(0xFFA855F7)
         isFalse -> CoralWarningRed
         isMisleading -> Color(0xFFFB923C) // Amber Orange
         isUnverified -> WarningYellow
@@ -97,6 +100,7 @@ fun ResultScreen(
 
     val headlineText = analysisResult?.verdict?.ifEmpty { null }
         ?: when {
+            isAiGenerated -> "AI-Generated"
             isFalse -> "False"
             isMisleading -> "Misleading"
             isUnverified -> "Needs Further Verification"
@@ -105,10 +109,12 @@ fun ResultScreen(
 
     val statusTag = when {
         isInsufficient -> "INSUFFICIENT EVIDENCE / UNVERIFIED"
+        isAiGenerated -> "AI-GENERATED SYNTHETIC MEDIA"
+        rawVerdict.contains("Manipulated", ignoreCase = true) -> "MANIPULATED / MISLEADING"
         isFalse -> "FALSE / HIGH RISK"
         isMisleading -> "MISLEADING / PARTIAL TRUTH"
         isUnverified -> "NEEDS FURTHER VERIFICATION"
-        else -> "VERIFIED / TRUE"
+        else -> "VERIFIED / AUTHENTIC"
     }
 
     val riskTopTag = analysisResult?.riskLevel ?: when {
@@ -503,6 +509,32 @@ fun ResultScreen(
                             modifier = Modifier.padding(14.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
+                            if (!analysisResult?.evidenceSupportingScore.isNullOrBlank()) {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = themeColor.copy(alpha = 0.12f),
+                                    border = BorderStroke(1.dp, themeColor.copy(alpha = 0.35f)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(10.dp)) {
+                                        Text(
+                                            text = "EVIDENCE BASIS FOR VERDICT & SCORE",
+                                            color = themeColor,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            letterSpacing = 0.8.sp
+                                        )
+                                        Spacer(modifier = Modifier.height(3.dp))
+                                        Text(
+                                            text = analysisResult!!.evidenceSupportingScore!!,
+                                            color = Color.White,
+                                            fontSize = 11.sp,
+                                            lineHeight = 15.sp
+                                        )
+                                    }
+                                }
+                            }
+
                             if (!analysisResult?.reasons.isNullOrEmpty()) {
                                 analysisResult!!.reasons.forEach { reason ->
                                     if (isMisleading) {

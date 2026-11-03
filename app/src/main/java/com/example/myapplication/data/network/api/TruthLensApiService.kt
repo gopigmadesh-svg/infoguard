@@ -4,6 +4,8 @@ import com.example.myapplication.data.network.model.AiChatRequest
 import com.example.myapplication.data.network.model.AiChatResponseData
 import com.example.myapplication.data.network.model.AnalysisResultDto
 import com.example.myapplication.data.network.model.AnalyzeClaimRequest
+import com.example.myapplication.data.network.model.AnalyzeImageRequest
+import com.example.myapplication.data.network.model.AnalyzeUrlRequest
 import com.example.myapplication.data.network.model.ApiResponse
 import com.example.myapplication.data.network.model.ForgotPasswordRequest
 import com.example.myapplication.data.network.model.LoginRequest
@@ -78,12 +80,27 @@ interface TruthLensApiService {
         @Body request: AnalyzeClaimRequest
     ): ApiResponse<AnalysisResultDto>
 
+    @POST("analysis/analyze_image.php")
+    suspend fun analyzeImage(
+        @Body request: AnalyzeImageRequest
+    ): ApiResponse<AnalysisResultDto>
+
+    @POST("analysis/analyze_url.php")
+    suspend fun analyzeUrl(
+        @Body request: AnalyzeUrlRequest
+    ): ApiResponse<AnalysisResultDto>
+
     @GET("analysis/get_recent_scans.php")
     suspend fun getRecentScans(
         @Query("user_id") userId: Int,
         @Query("limit") limit: Int = 10,
         @Query("token") token: String? = null
     ): ApiResponse<List<RecentScanDto>>
+
+    @POST("analysis/clear_history.php")
+    suspend fun clearHistory(
+        @Body request: Map<String, @JvmSuppressWildcards Any>
+    ): ApiResponse<Unit>
 
 
     // --- Saved Articles / Bookmarks ---

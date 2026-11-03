@@ -1,5 +1,11 @@
 package com.example.myapplication.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -23,28 +29,85 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 
 @Composable
 fun CameraScanScreen(
     onBackClick: () -> Unit = {},
     onCaptureClick: () -> Unit = {},
-    onGalleryClick: () -> Unit = {}
+    onGalleryClick: () -> Unit = {},
+    onImageSelected: (Uri) -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val isPreview = LocalInspectionMode.current
+    var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
+
+    val galleryLauncher = if (!isPreview) {
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.GetContent()
+        ) { uri: Uri? ->
+            uri?.let { onImageSelected(it) }
+        }
+    } else null
+
+    val cameraLauncher = if (!isPreview) {
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.TakePicture()
+        ) { success: Boolean ->
+            if (success && tempCameraUri != null) {
+                onImageSelected(tempCameraUri!!)
+            }
+        }
+    } else null
+
+    val cameraPermissionLauncher = if (!isPreview) {
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission()
+        ) { isGranted: Boolean ->
+            if (isGranted) {
+                val cameraUri = createTempImageUri(context)
+                if (cameraUri != Uri.EMPTY) {
+                    tempCameraUri = cameraUri
+                    cameraLauncher?.launch(cameraUri)
+                }
+            } else {
+                Toast.makeText(context, "Camera permission is required to capture photo.", Toast.LENGTH_SHORT).show()
+            }
+        }
+    } else null
+
+    fun triggerCamera() {
+        if (isPreview) return
+        val permissionCheck = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
+        if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
+            val cameraUri = createTempImageUri(context)
+            if (cameraUri != Uri.EMPTY) {
+                tempCameraUri = cameraUri
+                cameraLauncher?.launch(cameraUri)
+            }
+        } else {
+            cameraPermissionLauncher?.launch(Manifest.permission.CAMERA)
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -205,7 +268,7 @@ fun CameraScanScreen(
                                 Spacer(modifier = Modifier.height(16.dp))
 
                                 Text(
-                                    text = "Real 22% claim detected",
+                                    text = "Ready to inspect visual media",
                                     color = DarkNavyStart,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.ExtraBold,
@@ -215,7 +278,7 @@ fun CameraScanScreen(
                                 Spacer(modifier = Modifier.height(4.dp))
 
                                 Text(
-                                    text = "Align printing in frame",
+                                    text = "Tap Shutter or Gallery to scan",
                                     color = Color(0xFF64748B),
                                     fontSize = 10.sp,
                                     textAlign = TextAlign.Center
@@ -243,7 +306,7 @@ fun CameraScanScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Text detection active",
+                                    text = "Visual forensics ready",
                                     color = Color.White,
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold
@@ -264,7 +327,10 @@ fun CameraScanScreen(
                     // Gallery Button
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.clickable { onGalleryClick() }
+                        modifier = Modifier.clickable {
+                            galleryLauncher?.launch("image/*")
+                            onGalleryClick()
+                        }
                     ) {
                         Surface(
                             shape = RoundedCornerShape(14.dp),
@@ -293,7 +359,10 @@ fun CameraScanScreen(
                         shadowElevation = 12.dp,
                         modifier = Modifier
                             .size(72.dp)
-                            .clickable { onCaptureClick() }
+                            .clickable {
+                                triggerCamera()
+                                onCaptureClick()
+                            }
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Box(

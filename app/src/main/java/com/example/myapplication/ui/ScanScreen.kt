@@ -569,7 +569,13 @@ fun ScanScreen(
                             }
 
                             Button(
-                                onClick = { onScanImageClick(selectedImageUri, extractedOcrText) },
+                                onClick = {
+                                    if (selectedImageUri != null) {
+                                        onScanImageClick(selectedImageUri, extractedOcrText)
+                                    } else {
+                                        Toast.makeText(context, "Please upload an image or take a photo first.", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
                                 colors = ButtonDefaults.buttonColors(containerColor = PurpleInfo),
                                 shape = RoundedCornerShape(14.dp),
                                 modifier = Modifier
@@ -767,7 +773,7 @@ fun ScanScreen(
 }
 
 // Helper to create temporary image Uri for Camera TakePicture contract
-private fun createTempImageUri(context: Context): Uri {
+internal fun createTempImageUri(context: Context): Uri {
     return try {
         val tempFile = File.createTempFile("camera_photo_", ".jpg", context.cacheDir).apply {
             createNewFile()

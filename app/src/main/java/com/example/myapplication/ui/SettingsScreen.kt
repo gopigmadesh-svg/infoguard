@@ -5,6 +5,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,52 +41,83 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.example.myapplication.data.network.repository.AnalysisRepository
+import com.example.myapplication.data.network.repository.SessionManager
+import com.example.myapplication.data.network.repository.SettingsRepository
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(
+    currentTheme: String = "Dark Cyan",
+    onThemeChange: (String) -> Unit = {},
     onBackClick: () -> Unit = {},
+    onNavigateToProfile: () -> Unit = {},
     onNavigateToPersonalInfo: () -> Unit = {},
     onNavigateToChangePassword: () -> Unit = {},
     onNavigateToPreferences: () -> Unit = {},
     onNavigateToNotifications: () -> Unit = {},
     onNavigateToReminders: () -> Unit = {},
     onNavigateToPrivacySettings: () -> Unit = {},
-    onNavigateToAbout: () -> Unit = {}
+    onNavigateToAbout: () -> Unit = {},
+    onLogOutClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val sessionManager = remember { SessionManager(context) }
+    val settingsRepo = remember { SettingsRepository() }
+    val analysisRepo = remember { AnalysisRepository() }
 
-    var pushNotifications by remember { mutableStateOf(true) }
-    var factCheckReminders by remember { mutableStateOf(true) }
-    var weeklySummary by remember { mutableStateOf(false) }
+    var pushNotifications by remember { mutableStateOf(sessionManager.pushNotificationsEnabled) }
+    var factCheckReminders by remember { mutableStateOf(sessionManager.factCheckRemindersEnabled) }
+    var weeklySummary by remember { mutableStateOf(sessionManager.weeklySummaryEnabled) }
 
-    var selectedLanguage by remember { mutableStateOf("English") }
-    var selectedTheme by remember { mutableStateOf("Dark Cyan") }
-    var selectedTextScale by remember { mutableStateOf("Default (100%)") }
+    var selectedLanguage by remember { mutableStateOf(sessionManager.preferredLanguage) }
+    var selectedTheme by remember { mutableStateOf(if (currentTheme.isNotBlank()) currentTheme else sessionManager.appTheme) }
+    var selectedTextScale by remember { mutableStateOf(sessionManager.textScale) }
 
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
     var showTextScaleDialog by remember { mutableStateOf(false) }
     var showClearHistoryDialog by remember { mutableStateOf(false) }
+    var showLogoutDialog by remember { mutableStateOf(false) }
+
+    val isDark = when (selectedTheme) {
+        "Light Mode" -> false
+        "Dark Cyan", "Midnight Navy", "Dark Mode" -> true
+        else -> isSystemInDarkTheme()
+    }
+
+    val screenBgColors = if (isDark) {
+        listOf(DarkNavyStart, DarkNavyEnd)
+    } else {
+        listOf(Color(0xFFF1F5F9), Color(0xFFE2E8F0))
+    }
+    val cardContainerColor = if (isDark) Color(0xFF0F172A) else Color(0xFFFFFFFF)
+    val cardBorderColor = if (isDark) Color(0x1AFFFFFF) else Color(0x1A000000)
+    val textPrimaryColor = if (isDark) Color.White else Color(0xFF0F172A)
+    val textSecondaryColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val dividerColor = if (isDark) Color(0x1AFFFFFF) else Color(0x1A000000)
+    val surfaceButtonColor = if (isDark) Color(0x261E293B) else Color(0xFFE2E8F0)
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 brush = Brush.verticalGradient(
-                    colors = listOf(DarkNavyStart, DarkNavyEnd)
+                    colors = screenBgColors
                 )
             )
     ) {
         // Ambient background glow
         Canvas(modifier = Modifier.fillMaxSize()) {
+            val glowColor = if (isDark) Color(0x2000E5FF) else Color(0x140E7490)
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(Color(0x2000E5FF), Color.Transparent),
+                    colors = listOf(glowColor, Color.Transparent),
                     center = Offset(size.width * 0.15f, size.height * 0.15f),
                     radius = size.width * 0.6f
                 ),
@@ -109,7 +142,7 @@ fun SettingsScreen(
                 ) {
                     Surface(
                         shape = RoundedCornerShape(14.dp),
-                        color = Color(0x261E293B),
+                        color = surfaceButtonColor,
                         border = BorderStroke(1.dp, Color(0x3300E5FF)),
                         modifier = Modifier
                             .size(42.dp)
@@ -120,7 +153,7 @@ fun SettingsScreen(
                             modifier = Modifier.padding(10.dp)
                         ) {
                             Canvas(modifier = Modifier.fillMaxSize()) {
-                                drawBackArrowIcon(color = Color.White, strokeWidth = 3.5f)
+                                drawBackArrowIcon(color = textPrimaryColor, strokeWidth = 3.5f)
                             }
                         }
                     }
@@ -130,7 +163,7 @@ fun SettingsScreen(
                     Column {
                         Text(
                             text = "Settings",
-                            color = Color.White,
+                            color = textPrimaryColor,
                             fontSize = 22.sp,
                             fontWeight = FontWeight.ExtraBold,
                             letterSpacing = (-0.5).sp
@@ -138,7 +171,7 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "Manage your info-check experience.",
-                            color = Color(0xFF94A3B8),
+                            color = textSecondaryColor,
                             fontSize = 12.sp
                         )
                     }
@@ -147,16 +180,30 @@ fun SettingsScreen(
 
             // 2. ACCOUNT Section
             item {
-                SettingsSectionGroup(title = "ACCOUNT") {
+                SettingsSectionGroup(
+                    title = "ACCOUNT",
+                    containerColor = cardContainerColor,
+                    borderColor = cardBorderColor,
+                    titleColor = textPrimaryColor
+                ) {
                     SettingsRow(
                         iconEmoji = "👤",
-                        title = "Personal Information",
+                        title = "View Profile",
+                        textColor = textPrimaryColor,
+                        onClick = onNavigateToProfile
+                    )
+                    HorizontalDivider(color = dividerColor)
+                    SettingsRow(
+                        iconEmoji = "✏️",
+                        title = "Personal Information & Setup",
+                        textColor = textPrimaryColor,
                         onClick = onNavigateToPersonalInfo
                     )
-                    HorizontalDivider(color = Color(0x1AFFFFFF))
+                    HorizontalDivider(color = dividerColor)
                     SettingsRow(
                         iconEmoji = "🔑",
                         title = "Change Password",
+                        textColor = textPrimaryColor,
                         onClick = onNavigateToChangePassword
                     )
                 }
@@ -164,23 +211,31 @@ fun SettingsScreen(
 
             // 3. PREFERENCES Section
             item {
-                SettingsSectionGroup(title = "PREFERENCES") {
+                SettingsSectionGroup(
+                    title = "PREFERENCES",
+                    containerColor = cardContainerColor,
+                    borderColor = cardBorderColor,
+                    titleColor = textPrimaryColor
+                ) {
                     SettingsRow(
                         iconEmoji = "🌐",
                         title = "Preferred Language",
                         trailingText = selectedLanguage,
+                        textColor = textPrimaryColor,
                         onClick = { showLanguageDialog = true }
                     )
-                    HorizontalDivider(color = Color(0x1AFFFFFF))
+                    HorizontalDivider(color = dividerColor)
                     SettingsRow(
                         iconEmoji = "📱",
                         title = "Content Categories",
+                        textColor = textPrimaryColor,
                         onClick = onNavigateToPreferences
                     )
-                    HorizontalDivider(color = Color(0x1AFFFFFF))
+                    HorizontalDivider(color = dividerColor)
                     SettingsRow(
                         iconEmoji = "⚙️",
                         title = "Fact-Check Preferences",
+                        textColor = textPrimaryColor,
                         onClick = onNavigateToPreferences
                     )
                 }
@@ -188,35 +243,60 @@ fun SettingsScreen(
 
             // 4. FACT-CHECKING Section
             item {
-                SettingsSectionGroup(title = "FACT-CHECKING") {
+                SettingsSectionGroup(
+                    title = "FACT-CHECKING",
+                    containerColor = cardContainerColor,
+                    borderColor = cardBorderColor,
+                    titleColor = textPrimaryColor
+                ) {
                     SettingsSwitchRow(
                         iconEmoji = "🔔",
                         title = "Push Notifications",
                         checked = pushNotifications,
+                        textColor = textPrimaryColor,
                         onCheckedChange = {
                             pushNotifications = it
-                            if (it) onNavigateToNotifications()
+                            sessionManager.pushNotificationsEnabled = it
+                            val userId = sessionManager.currentUserId
+                            if (userId > 0) {
+                                coroutineScope.launch {
+                                    settingsRepo.updateSettings(userId, notificationsEnabled = it)
+                                }
+                            }
+                            Toast.makeText(
+                                context,
+                                if (it) "Push notifications enabled" else "Push notifications disabled",
+                                Toast.LENGTH_SHORT
+                            ).show()
                         },
                         onClickRow = onNavigateToNotifications
                     )
-                    HorizontalDivider(color = Color(0x1AFFFFFF))
+                    HorizontalDivider(color = dividerColor)
                     SettingsSwitchRow(
                         iconEmoji = "⏱️",
                         title = "Fact-Check Reminders",
                         checked = factCheckReminders,
+                        textColor = textPrimaryColor,
                         onCheckedChange = {
                             factCheckReminders = it
-                            if (it) onNavigateToReminders()
+                            sessionManager.factCheckRemindersEnabled = it
+                            Toast.makeText(
+                                context,
+                                if (it) "Fact-check reminders enabled" else "Fact-check reminders disabled",
+                                Toast.LENGTH_SHORT
+                            ).show()
                         },
                         onClickRow = onNavigateToReminders
                     )
-                    HorizontalDivider(color = Color(0x1AFFFFFF))
+                    HorizontalDivider(color = dividerColor)
                     SettingsSwitchRow(
                         iconEmoji = "📊",
                         title = "Weekly Summary",
                         checked = weeklySummary,
+                        textColor = textPrimaryColor,
                         onCheckedChange = {
                             weeklySummary = it
+                            sessionManager.weeklySummaryEnabled = it
                             Toast.makeText(
                                 context,
                                 if (it) "Weekly summary notifications enabled" else "Weekly summary disabled",
@@ -229,18 +309,25 @@ fun SettingsScreen(
 
             // 5. APPEARANCE Section
             item {
-                SettingsSectionGroup(title = "APPEARANCE") {
+                SettingsSectionGroup(
+                    title = "APPEARANCE",
+                    containerColor = cardContainerColor,
+                    borderColor = cardBorderColor,
+                    titleColor = textPrimaryColor
+                ) {
                     SettingsRow(
                         iconEmoji = "🌙",
-                        title = "Dark Mode",
+                        title = "Appearance Theme",
                         trailingText = selectedTheme,
+                        textColor = textPrimaryColor,
                         onClick = { showThemeDialog = true }
                     )
-                    HorizontalDivider(color = Color(0x1AFFFFFF))
+                    HorizontalDivider(color = dividerColor)
                     SettingsRow(
                         iconEmoji = "🔤",
                         title = "Text Scale",
                         trailingText = selectedTextScale,
+                        textColor = textPrimaryColor,
                         onClick = { showTextScaleDialog = true }
                     )
                 }
@@ -248,22 +335,30 @@ fun SettingsScreen(
 
             // 6. PRIVACY Section
             item {
-                SettingsSectionGroup(title = "PRIVACY") {
+                SettingsSectionGroup(
+                    title = "PRIVACY",
+                    containerColor = cardContainerColor,
+                    borderColor = cardBorderColor,
+                    titleColor = textPrimaryColor
+                ) {
                     SettingsRow(
                         iconEmoji = "🗑️",
                         title = "Data Management",
+                        textColor = textPrimaryColor,
                         onClick = onNavigateToPrivacySettings
                     )
-                    HorizontalDivider(color = Color(0x1AFFFFFF))
+                    HorizontalDivider(color = dividerColor)
                     SettingsRow(
                         iconEmoji = "⏱️",
                         title = "Clear Search History",
+                        textColor = textPrimaryColor,
                         onClick = { showClearHistoryDialog = true }
                     )
-                    HorizontalDivider(color = Color(0x1AFFFFFF))
+                    HorizontalDivider(color = dividerColor)
                     SettingsRow(
                         iconEmoji = "🛡️",
                         title = "Privacy Settings",
+                        textColor = textPrimaryColor,
                         onClick = onNavigateToPrivacySettings
                     )
                 }
@@ -271,11 +366,34 @@ fun SettingsScreen(
 
             // 7. ABOUT Section
             item {
-                SettingsSectionGroup(title = "ABOUT") {
+                SettingsSectionGroup(
+                    title = "ABOUT",
+                    containerColor = cardContainerColor,
+                    borderColor = cardBorderColor,
+                    titleColor = textPrimaryColor
+                ) {
                     SettingsRow(
                         iconEmoji = "ℹ️",
                         title = "About TruthLens",
+                        textColor = textPrimaryColor,
                         onClick = onNavigateToAbout
+                    )
+                }
+            }
+
+            // 8. ACCOUNT ACTIONS / LOGOUT Section
+            item {
+                SettingsSectionGroup(
+                    title = "ACCOUNT ACTIONS",
+                    containerColor = cardContainerColor,
+                    borderColor = cardBorderColor,
+                    titleColor = textPrimaryColor
+                ) {
+                    SettingsRow(
+                        iconEmoji = "🚪",
+                        title = "Log Out",
+                        textColor = Color(0xFFF87171),
+                        onClick = { showLogoutDialog = true }
                     )
                 }
             }
@@ -292,7 +410,14 @@ fun SettingsScreen(
             currentSelection = selectedLanguage,
             onOptionSelected = {
                 selectedLanguage = it
+                sessionManager.preferredLanguage = it
                 showLanguageDialog = false
+                val userId = sessionManager.currentUserId
+                if (userId > 0) {
+                    coroutineScope.launch {
+                        settingsRepo.updateSettings(userId, language = it)
+                    }
+                }
                 Toast.makeText(context, "Language set to $it", Toast.LENGTH_SHORT).show()
             },
             onDismiss = { showLanguageDialog = false }
@@ -303,11 +428,19 @@ fun SettingsScreen(
     if (showThemeDialog) {
         SettingsSelectionDialog(
             title = "🌙 Select Appearance Theme",
-            options = listOf("Dark Cyan", "Midnight Navy", "System Default"),
+            options = listOf("Dark Cyan", "Light Mode", "System Default"),
             currentSelection = selectedTheme,
             onOptionSelected = {
                 selectedTheme = it
+                sessionManager.appTheme = it
+                onThemeChange(it)
                 showThemeDialog = false
+                val userId = sessionManager.currentUserId
+                if (userId > 0) {
+                    coroutineScope.launch {
+                        settingsRepo.updateSettings(userId, theme = it)
+                    }
+                }
                 Toast.makeText(context, "Theme set to $it", Toast.LENGTH_SHORT).show()
             },
             onDismiss = { showThemeDialog = false }
@@ -322,6 +455,7 @@ fun SettingsScreen(
             currentSelection = selectedTextScale,
             onOptionSelected = {
                 selectedTextScale = it
+                sessionManager.textScale = it
                 showTextScaleDialog = false
                 Toast.makeText(context, "Text scale set to $it", Toast.LENGTH_SHORT).show()
             },
@@ -334,7 +468,7 @@ fun SettingsScreen(
         Dialog(onDismissRequest = { showClearHistoryDialog = false }) {
             Card(
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                colors = CardDefaults.cardColors(containerColor = cardContainerColor),
                 border = BorderStroke(1.dp, CyanAccent),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -344,14 +478,14 @@ fun SettingsScreen(
                 ) {
                     Text(
                         text = "⏱️ Clear Search History?",
-                        color = Color.White,
+                        color = textPrimaryColor,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
 
                     Text(
                         text = "This will clear your recent fact-check searches stored on this device. Bookmarked articles will remain saved.",
-                        color = Color(0xFF94A3B8),
+                        color = textSecondaryColor,
                         fontSize = 12.sp,
                         lineHeight = 16.sp
                     )
@@ -363,7 +497,19 @@ fun SettingsScreen(
                         Button(
                             onClick = {
                                 showClearHistoryDialog = false
-                                Toast.makeText(context, "Search history cleared successfully.", Toast.LENGTH_SHORT).show()
+                                val userId = sessionManager.currentUserId
+                                if (userId > 0) {
+                                    coroutineScope.launch {
+                                        val clearRes = analysisRepo.clearHistory(userId)
+                                        if (clearRes.isSuccess) {
+                                            Toast.makeText(context, "Search history cleared successfully.", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            Toast.makeText(context, "Search history cleared.", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                } else {
+                                    Toast.makeText(context, "Search history cleared successfully.", Toast.LENGTH_SHORT).show()
+                                }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = LowTrustRed),
                             shape = RoundedCornerShape(12.dp),
@@ -374,8 +520,8 @@ fun SettingsScreen(
 
                         Surface(
                             shape = RoundedCornerShape(12.dp),
-                            color = Color(0x261E293B),
-                            border = BorderStroke(1.dp, Color(0x33FFFFFF)),
+                            color = surfaceButtonColor,
+                            border = BorderStroke(1.dp, dividerColor),
                             modifier = Modifier
                                 .weight(1f)
                                 .clickable { showClearHistoryDialog = false }
@@ -384,7 +530,71 @@ fun SettingsScreen(
                                 contentAlignment = Alignment.Center,
                                 modifier = Modifier.padding(vertical = 10.dp)
                             ) {
-                                Text("Cancel", color = Color.White, fontWeight = FontWeight.Bold)
+                                Text("Cancel", color = textPrimaryColor, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Dialog 5: Logout Confirmation Dialog
+    if (showLogoutDialog) {
+        Dialog(onDismissRequest = { showLogoutDialog = false }) {
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = cardContainerColor),
+                border = BorderStroke(1.dp, Color(0x4DF87171)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Text(
+                        text = "🚪 Confirm Log Out",
+                        color = textPrimaryColor,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+
+                    Text(
+                        text = "Are you sure you want to log out of TruthLens? Your saved articles and fact-checks will remain securely stored.",
+                        color = textSecondaryColor,
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp
+                    )
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Button(
+                            onClick = {
+                                showLogoutDialog = false
+                                onLogOutClick()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = LowTrustRed),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Log Out", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = surfaceButtonColor,
+                            border = BorderStroke(1.dp, dividerColor),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { showLogoutDialog = false }
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.padding(vertical = 10.dp)
+                            ) {
+                                Text("Cancel", color = textPrimaryColor, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -469,6 +679,9 @@ fun SettingsSelectionDialog(
 @Composable
 fun SettingsSectionGroup(
     title: String,
+    containerColor: Color = Color(0xFF0F172A),
+    borderColor: Color = Color(0x1AFFFFFF),
+    titleColor: Color = Color.White,
     content: @Composable () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -481,7 +694,7 @@ fun SettingsSectionGroup(
             )
             Text(
                 text = title,
-                color = Color.White,
+                color = titleColor,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.2.sp
@@ -490,8 +703,8 @@ fun SettingsSectionGroup(
 
         Card(
             shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
-            border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+            colors = CardDefaults.cardColors(containerColor = containerColor),
+            border = BorderStroke(1.dp, borderColor),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
@@ -506,6 +719,7 @@ fun SettingsRow(
     iconEmoji: String,
     title: String,
     trailingText: String? = null,
+    textColor: Color = Color.White,
     onClick: () -> Unit = {}
 ) {
     Row(
@@ -521,7 +735,7 @@ fun SettingsRow(
             Spacer(modifier = Modifier.width(12.dp))
             Text(
                 text = title,
-                color = Color.White,
+                color = textColor,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -552,6 +766,7 @@ fun SettingsSwitchRow(
     iconEmoji: String,
     title: String,
     checked: Boolean,
+    textColor: Color = Color.White,
     onCheckedChange: (Boolean) -> Unit,
     onClickRow: () -> Unit = {}
 ) {
@@ -568,7 +783,7 @@ fun SettingsSwitchRow(
             Spacer(modifier = Modifier.width(12.dp))
             Text(
                 text = title,
-                color = Color.White,
+                color = textColor,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium
             )
