@@ -66,13 +66,16 @@ fun LoginScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val serverError by viewModel.errorMessage.collectAsState()
 
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var localError by remember { mutableStateOf<String?>(null) }
+
     LaunchedEffect(Unit) {
         viewModel.clearError()
+        email = ""
+        password = ""
+        localError = null
     }
-
-    var email by remember { mutableStateOf("alex@example.com") }
-    var password by remember { mutableStateOf("password123") }
-    var localError by remember { mutableStateOf<String?>(null) }
 
     fun validateAndLogin() {
         val trimmedEmail = email.trim()
@@ -254,6 +257,14 @@ fun LoginScreen(
                     onValueChange = {
                         email = it
                         localError = null
+                        viewModel.clearError()
+                    },
+                    placeholder = {
+                        Text(
+                            text = "name@example.com",
+                            color = Color(0xFF64748B),
+                            fontSize = 14.sp
+                        )
                     },
                     singleLine = true,
                     leadingIcon = {
@@ -292,6 +303,14 @@ fun LoginScreen(
                     onValueChange = {
                         password = it
                         localError = null
+                        viewModel.clearError()
+                    },
+                    placeholder = {
+                        Text(
+                            text = "••••••••••••",
+                            color = Color(0xFF64748B),
+                            fontSize = 14.sp
+                        )
                     },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),

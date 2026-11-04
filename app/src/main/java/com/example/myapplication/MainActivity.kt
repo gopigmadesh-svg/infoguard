@@ -654,7 +654,10 @@ fun MainAppNav(
                         navigateTo(AppScreen.PRESENTATION_BOARD)
                     },
                     onLogOutClick = {
-                        navigateTo(AppScreen.LOGOUT)
+                        authViewModel.logout {
+                            navigationStack.clear()
+                            navigationStack.add(AppScreen.LOGIN)
+                        }
                     }
                 )
             }

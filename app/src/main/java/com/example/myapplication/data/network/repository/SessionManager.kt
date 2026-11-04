@@ -47,17 +47,20 @@ class SessionManager(context: Context) {
             putString(KEY_USER_EMAIL, user.email)
             if (!user.bio.isNullOrEmpty()) {
                 putString(KEY_USER_BIO, user.bio)
+            } else {
+                remove(KEY_USER_BIO)
             }
             val avatar = user.avatarUrl ?: user.profilePicture
             if (!avatar.isNullOrEmpty()) {
                 putString(KEY_USER_AVATAR, avatar)
+            } else {
+                remove(KEY_USER_AVATAR)
             }
             if (!resolvedToken.isNullOrEmpty()) {
                 putString(KEY_AUTH_TOKEN, resolvedToken)
                 NetworkConfig.currentAuthToken = resolvedToken
             }
-            apply()
-        }
+        }.commit()
     }
 
     fun saveUserProfile(profile: UserProfileDto) {
@@ -137,8 +140,7 @@ class SessionManager(context: Context) {
             remove(KEY_USER_BIO)
             remove(KEY_USER_AVATAR)
             remove(KEY_AUTH_TOKEN)
-            apply()
-        }
+        }.commit()
         NetworkConfig.currentAuthToken = null
     }
 
