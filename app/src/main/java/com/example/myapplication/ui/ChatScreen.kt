@@ -711,6 +711,7 @@ fun AiConfigDialog(
     val context = LocalContext.current
     var selectedModel by remember { mutableStateOf(AiChatRepository.selectedModel) }
     var selectedFocus by remember { mutableStateOf(AiChatRepository.selectedFocus) }
+    var serverUrlText by remember { mutableStateOf(NetworkConfig.currentBaseUrl) }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -859,6 +860,79 @@ fun AiConfigDialog(
                     }
                 }
 
+                // Backend Server Connection & Address Switcher
+                Text(
+                    text = "BACKEND SERVER CONNECTION",
+                    color = Color(0xFF94A3B8),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+
+                OutlinedTextField(
+                    value = serverUrlText,
+                    onValueChange = { serverUrlText = it },
+                    label = { Text("Server Base URL", fontSize = 11.sp, color = Color(0xFF94A3B8)) },
+                    textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 12.sp),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = CyanAccent,
+                        unfocusedBorderColor = Color(0x40FFFFFF),
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    )
+                )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    val isUsb = serverUrlText.contains("127.0.0.1")
+                    val isLan = serverUrlText.contains("172.23.49.195")
+
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (isUsb) Color(0x3300E5FF) else Color(0x1F1E293B),
+                        border = BorderStroke(1.dp, if (isUsb) CyanAccent else Color(0x33FFFFFF)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                serverUrlText = NetworkConfig.DEFAULT_USB_BASE_URL
+                            }
+                    ) {
+                        Text(
+                            text = "🔌 USB\n(127.0.0.1)",
+                            color = if (isUsb) CyanAccent else Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (isLan) Color(0x3300E5FF) else Color(0x1F1E293B),
+                        border = BorderStroke(1.dp, if (isLan) CyanAccent else Color(0x33FFFFFF)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                serverUrlText = NetworkConfig.DEFAULT_LAN_BASE_URL
+                            }
+                    ) {
+                        Text(
+                            text = "📶 Wi-Fi LAN\n(172.23.49.195)",
+                            color = if (isLan) CyanAccent else Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
+                }
+
                 // Security & Server Status Card
                 Surface(
                     shape = RoundedCornerShape(12.dp),
@@ -886,7 +960,7 @@ fun AiConfigDialog(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Active Server: " + NetworkConfig.currentBaseUrl + "ai_chat.php",
+                            text = "Active Server: " + serverUrlText.trimEnd('/') + "/ai_chat.php",
                             color = Color(0xFF64748B),
                             fontSize = 9.sp
                         )
@@ -900,7 +974,7 @@ fun AiConfigDialog(
                 ) {
                     Button(
                         onClick = {
-                            AiChatRepository.savePreferences(context, selectedModel, selectedFocus)
+                            AiChatRepository.savePreferences(context, selectedModel, selectedFocus, serverUrlText)
                             onConfigUpdated(selectedModel, selectedFocus)
                             onDismiss()
                         },

@@ -16,6 +16,7 @@ import kotlinx.coroutines.withContext
  * AI Providers supported by TruthLens
  */
 enum class AiProvider {
+    LOCAL_SLM,
     GEMINI,
     OPENAI
 }
@@ -31,6 +32,14 @@ enum class AiModelOption(
     val badge: String,
     val description: String
 ) {
+    TRUTHLENS_LOCAL_SLM(
+        id = "truthlens-slm",
+        displayName = "TruthLens AI (Local SLM)",
+        provider = "local_slm",
+        modelCode = "qwen-2.5-1.5b-instruct",
+        badge = "Offline / Local",
+        description = "On-device/local Qwen 2.5 1.5B model running strictly on CPU with zero cloud API dependency"
+    ),
     GEMINI_31_FLASH_LITE(
         id = "gemini-3.1-flash-lite",
         displayName = "Gemini 3.1 Flash-Lite",
@@ -60,7 +69,7 @@ enum class AiModelOption(
         fun fromId(id: String): AiModelOption {
             return entries.firstOrNull { it.id.equals(id, ignoreCase = true) }
                 ?: entries.firstOrNull { it.modelCode.equals(id, ignoreCase = true) }
-                ?: GEMINI_31_FLASH_LITE
+                ?: TRUTHLENS_LOCAL_SLM
         }
     }
 }
@@ -118,24 +127,39 @@ object AiChatRepository {
     private const val PREFS_NAME = "truthlens_ai_config"
     private const val KEY_SELECTED_MODEL = "selected_ai_model"
     private const val KEY_SELECTED_FOCUS = "selected_ai_focus"
+    private const val KEY_CUSTOM_BASE_URL = "custom_backend_base_url"
 
-    // User-configurable preferences (Defaults to active, high-speed Gemini 3.1 Flash-Lite)
-    var selectedModel: AiModelOption = AiModelOption.GEMINI_31_FLASH_LITE
+    // User-configurable preferences (Defaults to local SLM)
+    var selectedModel: AiModelOption = AiModelOption.TRUTHLENS_LOCAL_SLM
     var selectedFocus: AiVerificationFocus = AiVerificationFocus.FACT_CHECK
 
     // Backward-compatible properties
     var apiKey: String = ""
     var selectedProvider: AiProvider
-        get() = if (selectedModel.provider == "openai") AiProvider.OPENAI else AiProvider.GEMINI
+        get() = when (selectedModel.provider) {
+            "openai" -> AiProvider.OPENAI
+            "local_slm" -> AiProvider.LOCAL_SLM
+            else -> AiProvider.GEMINI
+        }
         set(value) {
-            selectedModel = if (value == AiProvider.OPENAI) AiModelOption.OPENAI_GPT4O_MINI else AiModelOption.GEMINI_31_FLASH_LITE
+            selectedModel = when (value) {
+                AiProvider.OPENAI -> AiModelOption.OPENAI_GPT4O_MINI
+                AiProvider.LOCAL_SLM -> AiModelOption.TRUTHLENS_LOCAL_SLM
+                AiProvider.GEMINI -> AiModelOption.GEMINI_31_FLASH_LITE
+            }
         }
     var customBackendUrl: String = ""
 
     fun loadPreferences(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val savedModelId = prefs.getString(KEY_SELECTED_MODEL, AiModelOption.GEMINI_31_FLASH_LITE.id) ?: AiModelOption.GEMINI_31_FLASH_LITE.id
+        val savedModelId = prefs.getString(KEY_SELECTED_MODEL, AiModelOption.TRUTHLENS_LOCAL_SLM.id) ?: AiModelOption.TRUTHLENS_LOCAL_SLM.id
         val savedFocusId = prefs.getString(KEY_SELECTED_FOCUS, AiVerificationFocus.FACT_CHECK.id) ?: AiVerificationFocus.FACT_CHECK.id
+        val savedBaseUrl = prefs.getString(KEY_CUSTOM_BASE_URL, null)
+
+        if (!savedBaseUrl.isNullOrBlank()) {
+            customBackendUrl = savedBaseUrl
+            RetrofitClient.updateBaseUrl(savedBaseUrl)
+        }
         
         // Auto-migrate legacy deprecated model identifiers to active Gemini 3.1 Flash-Lite
         selectedModel = if (savedModelId.contains("gemini-1.5") || savedModelId.contains("gemini-2.0") || savedModelId.contains("gemini-pro")) {
@@ -146,13 +170,18 @@ object AiChatRepository {
         selectedFocus = AiVerificationFocus.fromId(savedFocusId)
     }
 
-    fun savePreferences(context: Context, model: AiModelOption, focus: AiVerificationFocus) {
+    fun savePreferences(context: Context, model: AiModelOption, focus: AiVerificationFocus, customUrl: String? = null) {
         selectedModel = model
         selectedFocus = focus
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().apply {
             putString(KEY_SELECTED_MODEL, model.id)
             putString(KEY_SELECTED_FOCUS, focus.id)
+            if (!customUrl.isNullOrBlank()) {
+                customBackendUrl = customUrl
+                RetrofitClient.updateBaseUrl(customUrl)
+                putString(KEY_CUSTOM_BASE_URL, customUrl)
+            }
             apply()
         }
     }
@@ -225,13 +254,13 @@ object AiChatRepository {
         val currentBase = NetworkConfig.currentBaseUrl
         val alternateBaseUrls = mutableListOf<String>()
 
-        if (!currentBase.contains("127.0.0.1")) {
+        if (currentBase != NetworkConfig.DEFAULT_USB_BASE_URL) {
             alternateBaseUrls.add(NetworkConfig.DEFAULT_USB_BASE_URL)
         }
-        if (!currentBase.contains("172.23.51.191")) {
+        if (currentBase != NetworkConfig.DEFAULT_LAN_BASE_URL) {
             alternateBaseUrls.add(NetworkConfig.DEFAULT_LAN_BASE_URL)
         }
-        if (NetworkConfig.isEmulator && !currentBase.contains("10.0.2.2")) {
+        if (NetworkConfig.isEmulator && currentBase != NetworkConfig.DEFAULT_EMULATOR_BASE_URL) {
             alternateBaseUrls.add(NetworkConfig.DEFAULT_EMULATOR_BASE_URL)
         }
 

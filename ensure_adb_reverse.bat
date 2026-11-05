@@ -77,8 +77,9 @@ echo [OK] Detected authorized Android device: !LAST_DEVICE!
 echo.
 
 :: 4. Set ADB Reverse Port Forwarding
-echo [3/4] Configuring ADB reverse forwarding (tcp:80 -^> tcp:80)...
+echo [3/4] Configuring ADB reverse forwarding (Port 80 & Port 5001)...
 "%ADB_EXE%" reverse tcp:80 tcp:80
+"%ADB_EXE%" reverse tcp:5001 tcp:5001
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Failed to execute adb reverse tcp:80 tcp:80.
     goto :end

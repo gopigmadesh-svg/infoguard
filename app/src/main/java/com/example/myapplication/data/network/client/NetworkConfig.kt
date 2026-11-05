@@ -14,8 +14,8 @@ import android.os.Build
 object NetworkConfig {
 
     const val DEFAULT_USB_BASE_URL = "http://127.0.0.1/Truthlense_backened/"
-    const val DEFAULT_EMULATOR_BASE_URL = " https://reformed-handwork-waving.ngrok-free.dev/Truthlense_backened/"
-    const val DEFAULT_LAN_BASE_URL = "http://172.23.51.191/Truthlense_backened/"
+    const val DEFAULT_EMULATOR_BASE_URL = "https://reformed-handwork-waving.ngrok-free.dev/Truthlense_backened/"
+    const val DEFAULT_LAN_BASE_URL = "http://172.23.49.195/Truthlense_backened/"
     const val DEV_TUNNELS_BASE_URL = "https://d14nzqz3-80.inc1.devtunnels.ms/Truthlense_backened/"
     const val LOCALHOST_BASE_URL = "http://127.0.0.1/Truthlense_backened/"
 
